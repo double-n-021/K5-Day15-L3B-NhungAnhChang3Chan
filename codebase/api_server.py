@@ -426,7 +426,40 @@ def _compute_structured_metadata(effective_text: str, reply_text: str, session_i
         intent_state = "recommendation"
 
     notes = [e.get("text", "") for e in events if e.get("kind") == "note"]
-    fallback_used = any("không qua check_answer" in n or "chữ rỗng" in n for n in notes)
+    fallback_used = any(
+        "không qua check_answer" in n or "không qua L3 guardrail" in n or "chữ rỗng" in n
+        for n in notes
+    )
+
+    l1_check = guardrails.pre_check_input(effective_text, req)
+    mappo_strategy = None
+    if origin is not None and pct is not None and v["known"] and intent_state in ("recommendation", "rescue"):
+        try:
+            mrec = mappo_policy.ENGINE.recommend(
+                origin_lat=float(origin["lat"]),
+                origin_lon=float(origin["lon"]),
+                soc_pct=float(pct),
+                vehicle_type=v["vehicle_type"],
+                ev_model=v["model"],
+                dest_lat=float(dest["lat"]) if dest else None,
+                dest_lon=float(dest["lon"]) if dest else None,
+                hour=float(now_h if now_h is not None else 12.0),
+                weekday=int(req["weekday"] if req["weekday"] is not None else 0),
+                urgent=bool(req["next_h"] is not None),
+                temp_c=float(weather.get("temp_used_c") or 24.0),
+                rain_pct=float(weather.get("rain_pct") or 0.0),
+                drain_factor=float(weather.get("drain_factor") or 1.0),
+            )
+            mappo_strategy = {
+                "engine": mrec["engine"],
+                "strategy": "TOPUP" if (rescue and mrec["strategy"] == "SKIP") else mrec["strategy"],
+                "strategy_vi": "SẠC NGAY (ưu tiên cứu pin <15%)" if (rescue and mrec["strategy"] == "SKIP") else mrec["strategy_vi"],
+                "recommended_station_id": mrec["recommended_station"]["id"] if mrec["recommended_station"] else None,
+                "confidence": mrec["confidence"],
+                "guardrail_l2_ok": mrec["guardrail_l2"]["ok"],
+            }
+        except Exception:
+            mappo_strategy = None
 
     tts_summary = _build_tts_summary(intent_state, stations_out, charge_window, green_reward, questions, reply_text)
 
@@ -468,11 +501,14 @@ def _compute_structured_metadata(effective_text: str, reply_text: str, session_i
         },
         "stations": stations_out,
         "charge_window": charge_window,
+        "mappo_strategy": mappo_strategy,
         "green_reward": green_reward,
         "follow_up_questions": questions,
         "guardrails": {
             "passed": not bool(summary.get("errors")),
             "fallback_used": fallback_used,
+            "layers": ["L1_input", "L2_policy_mask", "L3_output"],
+            "l1_violations": l1_check["violations"],
             "excluded_note": excluded_note,
             "model": ", ".join(models_used) or ai.MODEL_PROVIDER,
             "model_calls": model_calls,

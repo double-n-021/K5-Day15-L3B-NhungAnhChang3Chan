@@ -117,6 +117,24 @@ class GuardrailsAndMAPPOTest(unittest.TestCase):
             self.assertFalse(data["blocked_by_guardrail"])
             self.assertIn("recommendation", data)
             self.assertIn(data["recommendation"]["strategy"], ("TOPUP", "FULL", "SKIP"))
+
+            # Verify /api/v1/chat also exposes structured mappo_strategy + 3-layer guardrails
+            chat_body = json.dumps({
+                "message": "Pin 25%, VF e34, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu."
+            }).encode("utf-8")
+            chat_req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/v1/chat",
+                data=chat_body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(chat_req, timeout=10) as cresp:
+                self.assertEqual(cresp.status, 200)
+                cdata = json.loads(cresp.read().decode("utf-8"))
+            self.assertTrue(cdata["ok"])
+            self.assertIsNotNone(cdata.get("mappo_strategy"))
+            self.assertIn(cdata["mappo_strategy"]["strategy"], ("TOPUP", "FULL", "SKIP"))
+            self.assertEqual(cdata["guardrails"]["layers"], ["L1_input", "L2_policy_mask", "L3_output"])
         finally:
             srv.shutdown()
             srv.server_close()
