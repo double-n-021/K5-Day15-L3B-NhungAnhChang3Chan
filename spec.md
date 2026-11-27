@@ -50,18 +50,53 @@ Data BTC cấp đã dùng: Không (Track C nhóm tự chuẩn bị dữ liệu v
   2. Không xây dựng hệ thống dự báo phụ tải LSTM hay học tăng cường PPO/MARL trong 10 giờ hackathon.
   3. Không hỗ trợ tuyến liên tỉnh ngoài phạm vi TP. Hà Nội (chưa có dữ liệu trạm ngoài Hà Nội).
   4. Không chạy nhiều LLM Agent phản biện vòng lặp phức tạp gây chậm và đội chi phí gấp 3 lần.
-- **Sơ đồ kiến trúc (Workflow cố định 4 bước + Guardrail):**
+- **Sơ đồ kiến trúc (Workflow cố định 4 bước + 3 lớp Chặn rủi ro · khớp `codebase/agent.py`, `tools.py`, `ai.py` & `DATA_CARD.md`):**
+
+![CHARGEPILOT — AI Architecture](docs/architecture.png)
 
 ```mermaid
 flowchart TD
-    U["Đầu vào tài xế<br/>(% pin hiện tại, % pin muốn sạc, loại xe, điểm đi/đến Hà Nội, giờ đi)"] --> T1["1. parse_trip_request<br/>Tách thông số & Chặn ngoài HN / Injection / Thiếu dữ liệu"]
-    T1 -->|Thiếu pin hoặc điểm đến| Q["G10: Hỏi lại thông tin thiếu<br/>(Không đoán bừa)"]
-    T1 -->|Ngoài HN / Tấn công / Thiếu trạng thái| R["Từ chối an toàn + Giải thích"]
-    T1 -->|Đủ thông số hợp lệ| T2["2. get_hanoi_weather<br/>Open-Meteo Hà Nội (nhiệt độ, GHI, mưa) + Cache"]
-    T2 --> T3["3. plan_route_and_stations<br/>Tính tầm chạy, ETA, độ đông lúc đến, thời gian sạc & giá<br/>(Loại bảo trì · Cứu pin <15% · Cảnh báo LEZ)"]
-    T3 --> AI["4. Lõi AI: Gemini 3.8 Flash<br/>(CP2 chạy mock · CP3 nối model thật)<br/>Tổng hợp lộ trình & giải thích đánh đổi"]
-    AI --> T4["5. verify_guardrails<br/>Kiểm 100% mã [ST_...] có thật, 0% bảo trì, 0% vượt tầm"]
-    T4 --> OUT["Output JSON/Văn bản<br/>Lộ trình + Trạm #1 & #2 + Độ đông ETA + Thời gian & Chi phí sạc"]
+    subgraph DATA["NGUỒN DỮ LIỆU (data/DATA_CARD.md)"]
+        D1["Open-Meteo API thật\n+ weather_fallback.json (168h)"]
+        D2["hanoi_stations.json (32 trạm, seed=42)\n+ hanoi_landmarks.json (16 địa danh)"]
+        D3["ev_models.json\n(6 mẫu xe EV VN: pin, tầm chạy, hao pin)"]
+    end
+
+    subgraph INPUT["1. INPUT & TIỀN KIỂM (Chặn rủi ro lớp 1)"]
+        U["Đầu vào tài xế (answer(text))\n% pin hiện tại · % pin muốn sạc · loại xe · điểm đi/đến HN · giờ đi"]
+        T1["Bước 1: parse_trip_request (@tool)\nTách thông số & kiểm tra ranh giới an toàn"]
+        Q["G10: Hỏi lại thông tin thiếu\n(Thiếu % pin hoặc điểm đến — không đoán bừa)"]
+        R["Từ chối an toàn + Giải thích\n(Prompt Injection · Đặt cọc/thanh toán hộ · Ngoài HN · Thiếu trạng thái trụ)"]
+    end
+
+    subgraph CORE["2. CÔNG CỤ TÍNH TOÁN & LÕI AI (Chặn rủi ro lớp 2)"]
+        T2["Bước 2: get_hanoi_weather (@tool)\nLấy nhiệt độ, GHI, xác suất mưa + hệ số hao pin"]
+        T3["Bước 3: plan_route_and_stations (@tool)\nTính tầm chạy an toàn · ETA · độ đông lúc đến · phút sạc · giá V-Green vs QĐ 2892\n[Chặn cứng: loại maintenance · lọc quá 90% tầm · cứu pin <15% · cảnh báo LEZ]"]
+        AI["Bước 4: call_model (@model_call · codebase/ai.py)\nCP2: MODEL_PROVIDER=fake · CP3: Model thật qua .env (OpenAI / Gemini)\nTổng hợp lộ trình & giải thích đánh đổi bằng tiếng Việt"]
+    end
+
+    subgraph GUARD["3. HẬU KIỂM & ĐẦU RA (Chặn rủi ro lớp 3)"]
+        T4{"Bước 5: verify_guardrails (@tool)\n100% mã [ST_...] có thật · 0% bảo trì · 0% vượt tầm?"}
+        FB["Fallback an toàn (_format_mock_output)\nXuất trực tiếp kết quả đã kiểm chứng từ tools.py"]
+        OUT["Output (Tài xế tự quyết & điều hướng)\nLộ trình · Trạm #1 & #2 · Độ đông ETA · Thời gian & Chi phí sạc · Cảnh báo"]
+        HARNESS["Tracing & Kiểm thử K5 (run.py)\ntraces/run-N.jsonl · eval/benchmark.csv · cost/simulate.py"]
+    end
+
+    U --> T1
+    T1 -->|"Thiếu pin / điểm đến"| Q
+    T1 -->|"Ngoài HN / Tấn công / Ngoài thẩm quyền / Thiếu data"| R
+    T1 -->|"Hợp lệ"| T2
+
+    D1 --> T2
+    T2 --> T3
+    D2 --> T3
+    D3 --> T3
+
+    T3 --> AI
+    AI --> T4
+    T4 -->|"Đạt (ok=True)"| OUT
+    T4 -->|"Vi phạm (ok=False)"| FB --> OUT
+    OUT --> HARNESS
 ```
 
 - **Hình dạng:** `[x] workflow cố định` · `[ ] một agent` · `[ ] nhiều agent` — **Lý do:** Quy trình tư vấn lộ trình sạc có các bước tuần tự cố định (tách thông số → lấy thời tiết → tính toán toán học lộ trình/ETA/độ đông → AI tổng hợp giải thích → hậu kiểm). Chọn workflow cố định giúp chi phí token thấp nhất, độ trễ nhanh, và loại bỏ lỗi tính toán khoảng cách/tiền điện của LLM; không chọn nhiều agent vì chỉ có 1 vai tư vấn duy nhất, tách nhiều agent sẽ nhân 3 độ trễ và token.
