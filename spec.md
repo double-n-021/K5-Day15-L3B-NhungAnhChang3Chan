@@ -15,9 +15,9 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 - Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI):
 - Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ:
 - Pain (KHÔNG chữ AI): ai — đang làm gì — vướng đâu — hậu quả gì:
-- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): khảo sát Google Form 27/11/2026 ([kết quả](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555)), 39 câu trả lời, bỏ 3 người chưa từng đi xe điện → n = 36. Trong 1 tháng qua: 15/36 gặp trạm quá đông giờ cao điểm 17:30–22:30, 15/36 bị rét / nóng / tắc đường làm tụt pin, 13/36 không ước lượng được thời gian sạc, 13/36 app báo trống nhưng tới nơi kín chỗ, 11/36 gặp trụ hỏng / bảo trì; 13/36 mất thêm ≥ 20 phút ở lần gần nhất.
-  - **Lệch đối tượng:** khảo sát chủ yếu tới người đi xe máy điện (31/39 người dùng xe máy điện, chỉ 8/39 chỉ đi ô tô), trong khi người dùng chính của lát cắt là tài xế ô tô điện. Các số trên vì vậy là bằng chứng pain của người đi xe điện nói chung, **chưa phải** của riêng tài xế ô tô đi du lịch; cần phỏng vấn thêm tài xế ô tô để kiểm lại trước CP3.
-  - Thận trọng: 17/39 người chưa từng tự tìm trạm công cộng (chỉ sạc ở nhà), trong đó 11 người vẫn chọn sự cố gặp phải.
+- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): khảo sát Google Form 27/11/2026 ([kết quả](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555)), 44 câu trả lời, bỏ 3 người chưa từng đi xe điện → n = 41. Trong 1 tháng qua: 18/41 gặp trạm quá đông giờ cao điểm 17:30–22:30, 18/41 bị rét / nóng / tắc đường làm tụt pin, 15/41 app báo trống nhưng tới nơi kín chỗ, 15/41 gặp trụ hỏng / bảo trì, 14/41 không ước lượng được thời gian sạc; 16/41 mất thêm ≥ 20 phút ở lần gần nhất.
+  - **Lệch đối tượng:** khảo sát chủ yếu tới người đi xe máy điện (35/44 người dùng xe máy điện, chỉ 9/44 chỉ đi ô tô), trong khi người dùng chính của lát cắt là tài xế ô tô điện. Các số trên vì vậy là bằng chứng pain của người đi xe điện nói chung, **chưa phải** của riêng tài xế ô tô đi du lịch; cần phỏng vấn thêm tài xế ô tô để kiểm lại trước CP3.
+  - Thận trọng: 18/44 người chưa từng tự tìm trạm công cộng (chỉ sạc ở nhà), trong đó 12 người vẫn chọn sự cố gặp phải.
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
@@ -134,10 +134,10 @@ flowchart TD
 - Kết quả: lượt 1 28/29 (96,6%) · lượt 2 29/29 (100%) — run ID: `run-1@20261127-193233` / `run-2@20261127-221406` → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
-- Chi phí / task thành công: __ (model __) · __ (model __)
-- Chi phí / tháng ở quy mô thật: thấp __ · cơ sở __ · cao __ → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): đáng làm không, vì sao:
+- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (`simulate-1@20261127-222529`, 50 phiên, seed 42, 0/50 lỗi)
+- Chi phí / task thành công: `$0.00068` (≈ 17 ₫, model `claude-haiku-5-5`) · `$0.0135` (≈ 344 ₫, model `claude-sonnet-5-5`, đo token trên `claude-haiku-5-5`)
+- Chi phí / tháng ở quy mô thật (`claude-haiku-5-5`): thấp `$5.70` (≈ 144.661 ₫, 1.000 người) · cơ sở `$21.64` (≈ 549.711 ₫, 3.800 người) · cao `$56.95` (≈ 1.446.607 ₫, 10.000 người) → chi tiết `cost/cost-estimate.md`
+- So với impact / người / tháng (§2): chi phí chỉ `$0.0057` (≈ 145 ₫/người/tháng ở mức cơ sở) so với 16/41 người khảo sát mất ≥ 20 phút mỗi lần gặp sự cố — rất đáng làm trên `claude-haiku-5-5` (bảng impact §2 sẽ chốt số trước CP3).
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
@@ -155,6 +155,7 @@ flowchart TD
 |---|---|---|
 | 27/11 21:20 | Đồng bộ tên dự án thành `CHARGEPILOT` ở `canvas.md`, `spec.md`, `README.md`, `codebase/agent.py`, `codebase/tools.py` (giữ nguyên `eval/metric_spec.yaml` theo luật sau CP2); chấm hoàn tất lượt 1 `eval/run-1.csv` (`28/29`, trượt `B13` do lỗi mạng `WinError 10054`) và cập nhật kết quả vào `eval/report.md`, `eval/README.md`, `spec.md` §7 | Khớp tên `CHARGEPILOT` trên sơ đồ `docs/architecture.png`; hoàn tất chấm lượt 1 (`run-1@20261127-193233`) trước khi cải tiến sang lượt 2 |
 | 27/11 21:32 | Cải tiến cho lượt 2: thêm retry lỗi mạng tạm thời (`WinError 10054`) trong `codebase/ai.py`; siết `SYSTEM` prompt và `check_answer` chặn nhãn `"chưa kiểm tầm"` thừa & nhầm ngôi xưng `"Mình đang ở"`; bổ sung gợi ý khung/trạm sạc xanh theo bức xạ mặt trời Open-Meteo (`shortwave_radiation`) + điểm thưởng `Green Score` (`estimate_green_reward`, chỉ ghi nhận khi người dùng xác nhận trong `codebase/app.py`) | Khắc phục lỗi mạng `B13`, lỗi nhỏ `B20`/`B25` ở lượt 1, đồng thời đáp ứng gợi ý sạc năng lượng tái tạo và điểm thưởng có kiểm duyệt ở giao diện `Green Score Leaderboard` |
+| 27/11 22:30 | Cập nhật khảo sát Google Form lên `N = 44` (`n = 41`) ở `evidence/survey/survey.txt`, `spec.md` §1, `data/DATA_CARD.md`; hoàn tất mô phỏng chi phí 50 phiên (`cost/simulate-1.csv`, `simulate-1@20261127-222529`) theo `eval/run-2.csv` (`29/29 = 100%`) và điền `cost/cost-estimate.md`, `spec.md` §8 | Có thêm 5 phiếu khảo sát mới (19:52–21:22) và hoàn thành hạng mục mô phỏng chi phí dùng thật cho CP4 |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

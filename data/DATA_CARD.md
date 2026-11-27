@@ -75,10 +75,10 @@ Người kiểm: __ · số điểm đã đối chiếu trên app V-Green: __/53
 | Dùng để làm gì | Nguồn tình huống cho 11 câu thử `nguoi_dung` (B19–B29, cột `source` ghi số dòng). Bằng chứng pain chi tiết để ở `evidence/summary.md` |
 | Từ đâu | Google Form của nhóm, xuất TSV. Không thu tên, email, số điện thoại. **File gốc không commit** (`.gitignore`); bảng kết quả: [Google Sheets](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555); số tổng hợp ở `spec.md` §1 và `evidence/summary.md` |
 | Xử lý những bước gì | Không sửa câu trả lời. Câu thử dựng lại tình huống từ lựa chọn của người trả lời; chỉ B29 trích nguyên văn (dòng 6) |
-| Số dòng / số đoạn | 39 câu trả lời (27/11/2026 18:36–19:17) · 3 người chọn "chưa từng đi xe điện" → còn 36 đúng đối tượng |
+| Số dòng / số đoạn | 44 câu trả lời (27/11/2026 18:36–21:23) · 3 người chọn "chưa từng đi xe điện" → còn 41 đúng đối tượng |
 | Phiên bản / ngày lấy | 27/11/2026 |
 | Nhãn | thật |
-| Giới hạn | Mẫu nhỏ, thu trong 41 phút, có thể lệch về người quen của nhóm. 31/39 người dùng xe máy điện, chỉ 8/39 chỉ đi ô tô: **lệch xa so với người dùng chính "tài xế ô tô điện đi du lịch" ghi ở canvas**. 17/39 người "chưa bao giờ tự tìm trạm công cộng (chỉ sạc ở nhà)" (trong đó 11 người vẫn chọn sự cố gặp phải), nên câu hỏi sự cố cần đọc thận trọng |
+| Giới hạn | Mẫu nhỏ, thu trong 167 phút (~2 giờ 47 phút), có thể lệch về người quen của nhóm. 35/44 người dùng xe máy điện, chỉ 9/44 chỉ đi ô tô: **lệch xa so với người dùng chính "tài xế ô tô điện đi du lịch" ghi ở canvas**. 18/44 người "chưa bao giờ tự tìm trạm công cộng (chỉ sạc ở nhà)" (trong đó 12 người vẫn chọn sự cố gặp phải), nên câu hỏi sự cố cần đọc thận trọng |
 ---
 
 **Data `synthetic` không phải bằng chứng pain.** Dataset 2–3 chỉ để kiểm logic xếp hạng và chốt chặn. Bằng chứng pain (review app, phỏng vấn tài xế) để riêng ở `evidence/`.
