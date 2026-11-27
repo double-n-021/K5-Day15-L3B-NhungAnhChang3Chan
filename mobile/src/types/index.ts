@@ -259,5 +259,166 @@ export interface ProposedItineraryOption {
   reward: OffPeakReward;
   isIntercitySimulated: boolean;
   hanoiStationId?: string;
+  apiStationId?: string;
+  stationLat?: number | null;
+  stationLon?: number | null;
+  statusLabel?: string;
+  chargeWindowText?: string;
+  confirmToken?: string | null;
+  isLiveApi?: boolean;
+  fullReplyText?: string;
   timeline: JourneyStage[];
+}
+
+export type ApiIntentState =
+  | 'recommendation'
+  | 'rescue'
+  | 'home_charging'
+  | 'ask_back'
+  | 'refusal';
+
+export type ApiConnectionStatus = 'idle' | 'checking' | 'online' | 'offline';
+
+export interface ApiStationItem {
+  rank: number;
+  id: string;
+  name: string;
+  lat: number | null;
+  lon: number | null;
+  address: string | null;
+  road_km: number;
+  power_kw: number | null;
+  status: 'available' | 'crowded' | 'maintenance' | 'unverified' | null;
+  status_label: string;
+  pricing_model: string | null;
+  has_roof: boolean;
+  range_verified: boolean;
+}
+
+export interface ApiChargeWindow {
+  window: string;
+  duration_min: number;
+  reason: string;
+}
+
+export interface ApiGreenReward {
+  eligible: boolean;
+  points: number;
+  reasons: string[];
+  requires_user_confirmation: boolean;
+  confirm_token: string | null;
+}
+
+export interface ApiGuardrails {
+  passed: boolean;
+  fallback_used: boolean;
+  excluded_note: string | null;
+  model: string;
+  model_calls: number;
+  tool_calls: number;
+  tokens_in: number;
+  tokens_out: number;
+  latency_s: number;
+}
+
+export interface ApiMeta {
+  models: string[];
+  model_calls: number;
+  tool_calls: number;
+  tokens_in: number;
+  tokens_out: number;
+  latency_ms: number;
+}
+
+export interface ApiHealthResponse {
+  ok: boolean;
+  status: string;
+  service: string;
+  contract_version: string;
+  model_provider: string;
+  model: string;
+  model_name: string;
+  apk_available: boolean;
+  apk_meta: Record<string, unknown>;
+}
+
+export interface ApiDeviceContext {
+  lat?: number;
+  lon?: number;
+  default_vehicle?: string;
+  local_time?: string;
+  weekday?: number;
+}
+
+export interface ApiChatRequest {
+  message?: string;
+  text?: string;
+  session_id?: string;
+  device_context?: ApiDeviceContext;
+}
+
+export interface ApiChatResponse {
+  ok: boolean;
+  contract_version: string;
+  session_id: string;
+  query: string;
+  intent_state: ApiIntentState;
+  output: string;
+  reply: string;
+  reply_text: string;
+  tts_summary: string;
+  vehicle: {
+    model: string | null;
+    vehicle_type: 'o_to' | 'xe_may';
+    known: boolean;
+  };
+  battery: {
+    current_pct: number | null;
+    target_pct: number | null;
+    safe_range_km: number | null;
+    rescue_mode: boolean;
+  };
+  weather: {
+    temp_used_c: number | null;
+    drain_factor: number;
+    solar_wm2: number | null;
+    solar_best_window: string | null;
+  };
+  stations: ApiStationItem[];
+  charge_window: ApiChargeWindow | null;
+  green_reward: ApiGreenReward;
+  follow_up_questions: string[];
+  guardrails: ApiGuardrails;
+  meta: ApiMeta;
+}
+
+export interface ApiSessionResetResponse {
+  ok: boolean;
+  session_id: string;
+  cleared: boolean;
+}
+
+export interface ApiGreenConfirmRequest {
+  confirm_token: string;
+  user_name?: string;
+}
+
+export interface ApiGreenConfirmResponse {
+  ok: boolean;
+  points_added: number;
+  total_points: number;
+  green_sessions: number;
+  user_name: string;
+}
+
+export interface ApiLeaderboardEntry {
+  rank: number;
+  user_name: string;
+  total_points: number;
+  green_sessions: number;
+}
+
+export interface ApiLeaderboardResponse {
+  ok: boolean;
+  leaderboard: ApiLeaderboardEntry[];
 }
