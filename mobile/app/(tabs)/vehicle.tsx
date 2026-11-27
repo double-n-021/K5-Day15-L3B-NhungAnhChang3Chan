@@ -1,22 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Info,
   Minus,
   Play,
   Plus,
+  RefreshCw,
+  Server,
   ShieldCheck,
+  WifiOff,
 } from 'lucide-react-native';
 import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
@@ -40,10 +45,26 @@ export default function VehicleScreen() {
     greenPoints,
     rewardHistory,
     startDemo,
+    apiBaseUrl,
+    apiStatus,
+    apiModelName,
+    apiError,
+    leaderboard,
+    driverName,
+    setApiBaseUrl,
+    setDriverName,
+    checkServerHealth,
+    refreshLeaderboard,
   } = useChargePilotStore();
 
   const [showLicenses, setShowLicenses] = useState(false);
   const [angleIdx, setAngleIdx] = useState(0);
+  const [urlDraft, setUrlDraft] = useState(apiBaseUrl);
+  const [nameDraft, setNameDraft] = useState(driverName);
+
+  useEffect(() => {
+    setUrlDraft(apiBaseUrl);
+  }, [apiBaseUrl]);
 
   const vehicle = VEHICLES[vehicleId];
   const activeAngle = vehicle.angles[angleIdx] ?? vehicle.angles[0];
@@ -309,9 +330,21 @@ export default function VehicleScreen() {
                 Điểm Sạc Xanh (Trưa nắng)
               </Text>
             </View>
-            <Text style={[TYPOGRAPHY.metricLarge, { color: COLORS.warningAmber }]}>
-              {greenPoints}đ
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  void refreshLeaderboard();
+                }}
+                style={styles.miniRefreshBtn}
+                accessibilityLabel="Làm mới bảng xếp hạng Green Score"
+              >
+                <RefreshCw size={14} color={COLORS.textSecondary} />
+              </Pressable>
+              <Text style={[TYPOGRAPHY.metricLarge, { color: COLORS.warningAmber }]}>
+                {greenPoints}đ
+              </Text>
+            </View>
           </View>
           {rewardHistory.slice(0, 3).map((item) => (
             <View key={item.id} style={styles.rowBetween}>
@@ -330,6 +363,23 @@ export default function VehicleScreen() {
               </Text>
             </View>
           ))}
+          {leaderboard.length > 0 && (
+            <View style={styles.leaderboardBox}>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '700' }]}>
+                Bảng xếp hạng máy chủ (Live)
+              </Text>
+              {leaderboard.slice(0, 3).map((row) => (
+                <View key={`${row.rank}-${row.user_name}`} style={styles.rowBetween}>
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary }]}>
+                    #{row.rank} {row.user_name} ({row.green_sessions} phiên)
+                  </Text>
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.warningAmber, fontWeight: '700' }]}>
+                    {row.total_points}đ
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
           <Pressable
             onPress={() => {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -340,6 +390,103 @@ export default function VehicleScreen() {
             <Play size={15} color="#0B1017" fill="#0B1017" />
             <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
               Chạy trình diễn Demo Hackathon (13 bước)
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* VPS API Contract v1.0.0 Configuration */}
+        <View style={styles.cardPad}>
+          <View style={styles.rowBetween}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Server size={18} color={COLORS.energyGreen} />
+              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]}>
+                Kết nối máy chủ VPS (API v1.0.0)
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.apiStatusBadge,
+                apiStatus === 'online'
+                  ? { backgroundColor: COLORS.energyGreenDim, borderColor: COLORS.energyGreenBorder }
+                  : apiStatus === 'offline'
+                    ? { backgroundColor: COLORS.criticalRedDim, borderColor: COLORS.criticalRedBorder }
+                    : { backgroundColor: COLORS.surfaceElevated, borderColor: COLORS.border },
+              ]}
+            >
+              {apiStatus === 'online' ? (
+                <CheckCircle2 size={12} color={COLORS.energyGreen} />
+              ) : apiStatus === 'offline' ? (
+                <WifiOff size={12} color={COLORS.criticalRed} />
+              ) : null}
+              <Text
+                style={[
+                  TYPOGRAPHY.micro,
+                  {
+                    color:
+                      apiStatus === 'online'
+                        ? COLORS.energyGreen
+                        : apiStatus === 'offline'
+                          ? COLORS.criticalRed
+                          : COLORS.textSecondary,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                {apiStatus === 'checking'
+                  ? 'Đang kiểm...'
+                  : apiStatus === 'online'
+                    ? `Online${apiModelName ? ` · ${apiModelName}` : ''}`
+                    : apiStatus === 'offline'
+                      ? 'Offline'
+                      : 'Chưa kiểm'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
+            Emulator: http://10.0.2.2:8000 · VPS: https://&lt;tunnel&gt;.trycloudflare.com
+          </Text>
+
+          <TextInput
+            value={urlDraft}
+            onChangeText={setUrlDraft}
+            placeholder="https://your-vps-tunnel.trycloudflare.com"
+            placeholderTextColor={COLORS.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={styles.apiInput}
+          />
+
+          <TextInput
+            value={nameDraft}
+            onChangeText={(txt) => {
+              setNameDraft(txt);
+              setDriverName(txt);
+            }}
+            placeholder="Tên tài xế trên Green Leaderboard"
+            placeholderTextColor={COLORS.textMuted}
+            style={styles.apiInput}
+          />
+
+          {apiError && apiStatus === 'offline' && (
+            <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
+              Lỗi kết nối: {apiError} (đang dùng engine offline dự phòng)
+            </Text>
+          )}
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setApiBaseUrl(urlDraft);
+              setDriverName(nameDraft);
+              void checkServerHealth();
+            }}
+            style={styles.checkApiBtn}
+          >
+            <RefreshCw size={15} color="#0B1017" />
+            <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
+              Kiểm tra kết nối (/health)
             </Text>
           </Pressable>
         </View>
@@ -567,5 +714,52 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.energyGreen,
     marginTop: 4,
+  },
+  miniRefreshBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaderboardBox: {
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    gap: 6,
+  },
+  apiStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  apiInput: {
+    minHeight: 42,
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    color: COLORS.textPrimary,
+    fontFamily: 'BeVietnamPro_400Regular',
+    fontSize: 13,
+  },
+  checkApiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.energyGreen,
   },
 });

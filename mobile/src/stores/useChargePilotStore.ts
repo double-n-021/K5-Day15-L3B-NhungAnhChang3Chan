@@ -3,6 +3,21 @@ import { DEMO_SEQUENCE } from '@/data/presets';
 import { HANOI_PLACES, HANOI_STATIONS } from '@/data/stations';
 import { HANOI_WEATHER_STATES } from '@/data/weather';
 import {
+  checkApiHealth,
+  confirmGreenScore,
+  fetchGreenLeaderboard,
+  formatLocalTimeHHMM,
+  generateSessionId,
+  getApiWeekday,
+  getDefaultApiBaseUrl,
+  mapApiResponseToProposedOptions,
+  mapApiStationsToChargingStations,
+  mergeApiStationsIntoList,
+  normalizeBaseUrl,
+  resetChatSession,
+  sendChatMessage,
+} from '@/services/chargePilotApi';
+import {
   applyScenariosToState,
   evaluateChargingDecision,
   generateItineraryOptionsForRequest,
@@ -12,6 +27,9 @@ import {
   timeToMinutes,
 } from '@/services/decisionEngine';
 import type {
+  ApiChatResponse,
+  ApiConnectionStatus,
+  ApiLeaderboardEntry,
   ChargingPreference,
   ChargingStation,
   ItineraryDecisionStatus,
@@ -47,6 +65,19 @@ interface ChargePilotState {
   activeOptionIndex: number;
   itineraryStatus: ItineraryDecisionStatus;
 
+  // Live API v1.0.0 integration state
+  apiBaseUrl: string;
+  apiStatus: ApiConnectionStatus;
+  apiModelName: string | null;
+  apiSessionId: string;
+  apiLoading: boolean;
+  apiError: string | null;
+  apiSourceMode: 'live' | 'offline_fallback';
+  lastApiResponse: ApiChatResponse | null;
+  leaderboard: ApiLeaderboardEntry[];
+  driverName: string;
+  confirmedTokens: string[];
+
   // Green Off-Peak Points (Trưa nắng / Thấp điểm)
   greenPoints: number;
   creditedOptionIds: string[];
@@ -67,6 +98,13 @@ interface ChargePilotState {
   setHasNextDestination: (enabled: boolean) => void;
   applyNaturalLanguagePrompt: (prompt: string) => void;
   analyzeNaturalPrompt: (prompt: string) => ParsedNaturalRequest;
+  setApiBaseUrl: (url: string) => void;
+  setDriverName: (name: string) => void;
+  checkServerHealth: () => Promise<boolean>;
+  refreshLeaderboard: () => Promise<void>;
+  sendPromptToApi: (prompt: string) => Promise<void>;
+  confirmGreenToken: (token: string, label?: string) => Promise<boolean>;
+  resetApiSession: () => Promise<void>;
   acceptProposedItinerary: () => void;
   declineProposedItinerary: () => void;
   requestAlternativeOption: () => void;
@@ -163,6 +201,18 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   proposedOptions: [],
   activeOptionIndex: 0,
   itineraryStatus: 'none',
+
+  apiBaseUrl: getDefaultApiBaseUrl(),
+  apiStatus: 'idle',
+  apiModelName: null,
+  apiSessionId: generateSessionId(),
+  apiLoading: false,
+  apiError: null,
+  apiSourceMode: 'offline_fallback',
+  lastApiResponse: null,
+  leaderboard: [],
+  driverName: 'Tài xế ChargePilot',
+  confirmedTokens: [],
 
   greenPoints: 120,
   creditedOptionIds: [],
@@ -301,6 +351,199 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     return parsed;
   },
 
+  setApiBaseUrl: (url) =>
+    set({
+      apiBaseUrl: normalizeBaseUrl(url),
+      apiStatus: 'idle',
+      apiError: null,
+    }),
+
+  setDriverName: (name) =>
+    set({
+      driverName: name.trim() || 'Tài xế ChargePilot',
+    }),
+
+  checkServerHealth: async () => {
+    const baseUrl = normalizeBaseUrl(get().apiBaseUrl);
+    if (!baseUrl) {
+      set({ apiStatus: 'offline', apiError: 'Chưa nhập địa chỉ máy chủ VPS.' });
+      return false;
+    }
+    set({ apiStatus: 'checking', apiError: null });
+    try {
+      const health = await checkApiHealth(baseUrl);
+      set({
+        apiBaseUrl: baseUrl,
+        apiStatus: 'online',
+        apiModelName: health.model_name || health.model || health.model_provider,
+        apiError: null,
+      });
+      void get().refreshLeaderboard();
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không kết nối được máy chủ.';
+      set({ apiStatus: 'offline', apiError: msg });
+      return false;
+    }
+  },
+
+  refreshLeaderboard: async () => {
+    try {
+      const res = await fetchGreenLeaderboard(get().apiBaseUrl);
+      set({ leaderboard: res.leaderboard || [] });
+    } catch {
+      // Keep existing leaderboard cache when server is temporarily unreachable
+    }
+  },
+
+  sendPromptToApi: async (prompt) => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+
+    const {
+      apiBaseUrl,
+      apiSessionId,
+      vehicleId,
+      effectiveInput,
+      weather,
+      activeScenarios,
+      selectedStationId,
+    } = get();
+
+    set({ apiLoading: true, apiError: null });
+
+    const [originLon, originLat] = effectiveInput.origin.coordinates;
+    const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
+
+    try {
+      const resp = await sendChatMessage(apiBaseUrl, {
+        message: trimmed,
+        session_id: apiSessionId,
+        device_context: {
+          lat: originLat,
+          lon: originLon,
+          default_vehicle: defaultVehicle,
+          local_time: formatLocalTimeHHMM(),
+          weekday: getApiWeekday(),
+        },
+      });
+
+      const nextVehicleId: VehicleId =
+        resp.vehicle.vehicle_type === 'xe_may'
+          ? 'vinfast_evo200'
+          : resp.vehicle.model
+            ? 'vfe34'
+            : vehicleId;
+      const nextBattery =
+        resp.battery.current_pct !== null
+          ? Math.max(5, Math.min(100, Math.round(resp.battery.current_pct)))
+          : get().journeyInput.batteryPct;
+
+      const nextInput: JourneyInput = {
+        ...get().journeyInput,
+        rawPrompt: trimmed,
+        vehicleId: nextVehicleId,
+        batteryPct: nextBattery,
+      };
+      const computed = recompute(nextInput, weather, activeScenarios, selectedStationId);
+      const apiChargingStations = mapApiStationsToChargingStations(resp);
+      const mergedStations = mergeApiStationsIntoList(
+        computed.effectiveStations,
+        apiChargingStations
+      );
+      const options = mapApiResponseToProposedOptions(
+        resp,
+        nextVehicleId,
+        effectiveInput.origin.shortName
+      );
+
+      set({
+        vehicleId: nextVehicleId,
+        journeyInput: nextInput,
+        ...computed,
+        effectiveStations: mergedStations,
+        apiStatus: 'online',
+        apiSourceMode: 'live',
+        apiModelName: resp.guardrails?.model || get().apiModelName,
+        lastApiResponse: resp,
+        apiSessionId: resp.session_id || apiSessionId,
+        apiLoading: false,
+        apiError: null,
+        parsedRequest: null,
+        proposedOptions: options,
+        activeOptionIndex: 0,
+        itineraryStatus: options.length > 0 ? 'pending' : 'none',
+        selectedStationId:
+          options[0]?.hanoiStationId ??
+          apiChargingStations[0]?.id ??
+          computed.recommendation.recommended?.station.id ??
+          selectedStationId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể kết nối máy chủ CHARGEPILOT.';
+      set({
+        apiStatus: 'offline',
+        apiSourceMode: 'offline_fallback',
+        apiError: msg,
+        apiLoading: false,
+        lastApiResponse: null,
+      });
+      get().analyzeNaturalPrompt(trimmed);
+    }
+  },
+
+  confirmGreenToken: async (token, label) => {
+    const trimmedToken = token.trim();
+    if (!trimmedToken) return false;
+    if (get().confirmedTokens.includes(trimmedToken)) {
+      return true;
+    }
+
+    try {
+      const res = await confirmGreenScore(get().apiBaseUrl, {
+        confirm_token: trimmedToken,
+        user_name: get().driverName,
+      });
+      set((s) => ({
+        greenPoints: s.greenPoints + res.points_added,
+        confirmedTokens: [...s.confirmedTokens, trimmedToken],
+        rewardHistory: [
+          {
+            id: trimmedToken,
+            title: label ? `Green Score · ${label}` : 'Xác nhận sạc xanh (Server)',
+            points: res.points_added,
+            time: 'Vừa xác nhận',
+          },
+          ...s.rewardHistory,
+        ],
+      }));
+      void get().refreshLeaderboard();
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không xác nhận được điểm Green Score.';
+      set({ apiError: msg });
+      return false;
+    }
+  },
+
+  resetApiSession: async () => {
+    const { apiBaseUrl, apiSessionId } = get();
+    try {
+      await resetChatSession(apiBaseUrl, apiSessionId);
+    } catch {
+      // Clear local session cleanly even if server is offline
+    }
+    set({
+      apiSessionId: generateSessionId(),
+      lastApiResponse: null,
+      parsedRequest: null,
+      proposedOptions: [],
+      activeOptionIndex: 0,
+      itineraryStatus: 'none',
+      apiError: null,
+    });
+  },
+
   acceptProposedItinerary: () => {
     const {
       proposedOptions,
@@ -312,6 +555,18 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     } = get();
     const active = proposedOptions[activeOptionIndex];
     const pts = active?.reward.points ?? 0;
+
+    if (active?.isLiveApi) {
+      set({
+        itineraryStatus: 'accepted',
+        selectedStationId: active.hanoiStationId ?? selectedStationId,
+      });
+      if (active.confirmToken && pts > 0) {
+        void get().confirmGreenToken(active.confirmToken, active.stationName);
+      }
+      return;
+    }
+
     const shouldCredit = active && pts > 0 && !creditedOptionIds.includes(active.id);
 
     set({
@@ -347,7 +602,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     set({
       activeOptionIndex: nextIdx,
       itineraryStatus: 'pending',
-      selectedStationId: nextOpt?.hanoiStationId ?? selectedStationId,
+      selectedStationId: nextOpt?.hanoiStationId ?? nextOpt?.apiStationId ?? selectedStationId,
     });
   },
 
