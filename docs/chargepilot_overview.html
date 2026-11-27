@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHARGEPILOT — Tổng quan dự án hoàn chỉnh</title>
+  <style>
+    :root {
+      --bg: #f4f7f9;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --emerald: #059669;
+      --emerald-soft: #ecfdf5;
+      --amber: #d97706;
+      --amber-soft: #fffbeb;
+      --navy: #1e293b;
+      --blue: #0284c7;
+      --blue-soft: #f0f9ff;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(160deg, #f8fafc 0%, #ecfdf5 100%);
+      color: var(--ink);
+      line-height: 1.65;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 36px 20px 64px;
+    }
+
+    header.hero {
+      background: linear-gradient(135deg, #0f172a 0%, #064e3b 100%);
+      color: #ffffff;
+      border-radius: 18px;
+      padding: 36px 32px;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+      margin-bottom: 28px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(16, 185, 129, 0.22);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      color: #a7f3d0;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+
+    header.hero h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      letter-spacing: -0.02em;
+    }
+
+    header.hero p.lead {
+      margin: 0 0 24px;
+      font-size: 16px;
+      color: #e2e8f0;
+      max-width: 820px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px;
+    }
+
+    .kpi {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .kpi .val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #6ee7b7;
+      line-height: 1.25;
+    }
+
+    .kpi .lbl {
+      font-size: 12.5px;
+      color: #cbd5e1;
+      margin-top: 4px;
+    }
+
+    section.card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 26px 28px;
+      margin-bottom: 22px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    }
+
+    section.card h2 {
+      margin: 0 0 14px;
+      font-size: 21px;
+      color: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 2px solid var(--emerald-soft);
+      padding-bottom: 10px;
+    }
+
+    .num-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--emerald);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .quote-box {
+      background: var(--emerald-soft);
+      border-left: 4px solid var(--emerald);
+      padding: 14px 18px;
+      border-radius: 0 10px 10px 0;
+      margin: 14px 0 0;
+      color: #064e3b;
+      font-size: 15px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14.5px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      color: var(--navy);
+      font-weight: 700;
+      font-size: 13.5px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .stat-tag {
+      display: inline-block;
+      background: var(--amber-soft);
+      color: #92400e;
+      border: 1px solid #fde68a;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 4px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-top: 10px;
+    }
+
+    .feature-box {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      background: #fcfdfd;
+    }
+
+    .feature-box h3 {
+      margin: 0 0 8px;
+      font-size: 16.5px;
+      color: var(--emerald);
+    }
+
+    .feature-box ul, .roadmap-col ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .feature-box li, .roadmap-col li {
+      margin-bottom: 7px;
+      font-size: 14.5px;
+      color: #334155;
+    }
+
+    .roadmap-col {
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .roadmap-hack {
+      background: var(--blue-soft);
+      border: 1px solid #bae6fd;
+    }
+
+    .roadmap-hack h3 { margin: 0 0 10px; color: #0369a1; font-size: 16.5px; }
+
+    .roadmap-prod {
+      background: var(--emerald-soft);
+      border: 1px solid #a7f3d0;
+    }
+
+    .roadmap-prod h3 { margin: 0 0 10px; color: #047857; font-size: 16.5px; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #0f172a;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 24px;
+    }
+
+    @media print {
+      body { background: #fff; }
+      header.hero { box-shadow: none; }
+      section.card { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <div class="badge">Nhóm NhungAnhChang3Chan · Lớp L3B · Track C</div>
+      <h1>CHARGEPILOT — Trợ lý Sạc Xe Điện Thông Minh tại Hà Nội</h1>
+      <p class="lead">
+        Trợ lý AI ưu tiên hội thoại &amp; giọng nói (<strong>Agent-First / Voice-First</strong>) dành cho tài xế ô tô điện và xe máy điện tại Hà Nội: tự nạp ngữ cảnh GPS/xe, tính tầm pin theo thời tiết thực tế, loại bỏ trụ bảo trì/kín chỗ, chọn khung giờ sạc xanh và tặng điểm thưởng <strong>Green Score</strong> khi xác nhận.
+      </p>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="val">N = 44 (n = 41)</div>
+          <div class="lbl">Khảo sát thực tế người đi xe điện tại Hà Nội</div>
+        </div>
+        <div class="kpi">
+          <div class="val">29 / 29 (100%)</div>
+          <div class="lbl">Kết quả bộ câu thử lượt 2 (<code>run-2</code>)</div>
+        </div>
+        <div class="kpi">
+          <div class="val">$0.00068 (≈ 17 ₫)</div>
+          <div class="lbl">Chi phí / phiên trên <code>claude-haiku-5-5</code> (50 phiên mô phỏng)</div>
+        </div>
+        <div class="kpi">
+          <div class="val">7 Tools + 3 Lớp</div>
+          <div class="lbl">Tính toán bằng code &amp; chốt chặn an toàn</div>
+        </div>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2><span class="num-pill">1</span> Bức tranh sản phẩm khi hoàn chỉnh</h2>
+      <p>
+        Thay vì bắt tài xế phải vừa lái xe vừa mở bản đồ, bấm lọc từng quận, tự đoán tầm pin khi trời lạnh và tự canh giờ cao điểm, ứng dụng Android APK <strong>CHARGEPILOT</strong> đặt luồng hội thoại &amp; giọng nói làm trung tâm.
+      </p>
+      <div class="quote-box">
+        <strong>Trải nghiệm mục tiêu:</strong> Tài xế chỉ cần nói hoặc nhắn 1 câu tự nhiên — ví dụ:
+        <em>"Còn 18% pin, 4 giờ đón khách ở Văn Miếu, sạc ở đâu?"</em> — App tự gửi kèm vị trí GPS và dòng xe mặc định; Backend Agent xử lý và trả về <strong>Top 3 trạm tương thích</strong>, <strong>khung giờ sạc vừa kịp lịch trình</strong>, <strong>gợi ý sạc xanh</strong> kèm nút dẫn đường Google Maps 1 chạm.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="num-pill">2</span> Những Pain Point được giải quyết (khảo sát <code>N = 44</code>, <code>n = 41</code>)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 34%;">Pain Point tài xế đang gặp</th>
+            <th style="width: 66%;">Cách CHARGEPILOT giải quyết</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>Trạm quá đông giờ cao điểm 17:30–22:30</strong><br />
+              <span class="stat-tag">18/41 (43,9%)</span>
+            </td>
+            <td>
+              Tự động lùi khung giờ sạc ra ngoài cao điểm (sau <code>22:30</code> hoặc trước <code>17:30</code>) khi pin và lịch hẹn cho phép; hạ điểm xếp hạng các trạm đang đông/có hàng chờ.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Trời rét / nóng / tắc đường làm tụt pin nhanh</strong><br />
+              <span class="stat-tag">18/41 (43,9%)</span>
+            </td>
+            <td>
+              Đọc dự báo thời tiết Hà Nội theo giờ (<code>Open-Meteo</code>) và đối chiếu nhiệt độ đồng hồ xe báo (luôn lấy mức lạnh hơn, trừ thêm <code>+15%</code> hao pin khi <code>≤15°C</code>, <code>+10%</code> khi <code>≥36°C</code>, <code>+5%</code> khi mưa <code>≥70%</code>) kèm biên an toàn 20% và hệ số đường <code>×1,3</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>App báo trống nhưng kín chỗ &amp; Trụ hỏng/bảo trì</strong><br />
+              <span class="stat-tag">15/41 (36,6%)</span>
+            </td>
+            <td>
+              Lọc cứng loại bỏ <strong>100% trạm bảo trì</strong> khỏi Top 3; cảnh báo rõ độ lệch khi app người dùng báo khác dữ liệu; luôn gắn nhãn <code>"trạng thái chưa xác minh"</code> cho điểm sạc xe máy chưa có dữ liệu thời gian thực.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Không ước lượng được thời gian sạc &amp; chênh lệch giá</strong><br />
+              <span class="stat-tag">14/41 (34,1%)</span>
+            </td>
+            <td>
+              Ước tính thời gian sạc theo công suất trụ/bộ sạc (<code>400W</code> vs <code>1000W</code> cho xe máy, <code>DC</code> cho ô tô), đảm bảo kết thúc <strong>trước giờ hẹn 15 phút</strong>, và chỉ rõ trạm áp dụng biểu giá bậc giờ QĐ 2892 (<code>1.620–2.700 đ/kWh</code> ngoài cao điểm).
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Mất ≥ 20 phút chờ/đổi trạm &amp; Nhầm loại trụ</strong><br />
+              <span class="stat-tag">16/41 (39,0%) mất ≥20 phút</span>
+            </td>
+            <td>
+              Tách cứng trụ ô tô CCS2 (<code>[ST_...]</code>) với điểm sạc xe máy 220V (<code>[MOTO_HN_...]</code>), loại trạm đổi pin riêng hãng (Selex/Dat Bike) với xe pin cố định (Evo200), nhắc mang bộ sạc, và kích hoạt <strong>chế độ cứu pin &lt;15%</strong> (sạc ngay, bỏ qua né cao điểm).
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2><span class="num-pill">3</span> Bộ tính năng cốt lõi của CHARGEPILOT</h2>
+      <div class="grid-2">
+        <div class="feature-box">
+          <h3>1. Giao tiếp Agent-First trên Android APK</h3>
+          <ul>
+            <li><strong>Voice + Chat:</strong> Nhập bằng giọng nói (STT/TTS tiếng Việt) hoặc nhắn tin ngắn gọn, tự gắn ngữ cảnh <code>device_context</code> (GPS, dòng xe mặc định, giờ hiện tại).</li>
+            <li><strong>Hội thoại đa lượt (G10):</strong> Thiếu <code>%</code> pin, dòng xe hay lịch trình thì hỏi lại đúng thông tin còn thiếu thay vì đoán bừa.</li>
+            <li><strong>5 Smart Cards tự động:</strong> <code>recommendation</code> (Top 3 + dẫn đường), <code>rescue</code> (khẩn cấp &lt;15%), <code>ask_back</code> (chip chọn nhanh), <code>home_charging</code> (sạc ở nhà) và <code>refusal</code> (từ chối an toàn).</li>
+          </ul>
+        </div>
+
+        <div class="feature-box">
+          <h3>2. Lõi tính toán &amp; 3 lớp Guardrails</h3>
+          <ul>
+            <li><strong>7 công cụ tính toán bằng code:</strong> <code>parse_request</code>, <code>get_weather</code>, <code>safe_range</code>, <code>find_stations</code>, <code>plan_charge_window</code>, <code>estimate_green_reward</code>, <code>check_answer</code>.</li>
+            <li><strong>1 lần gọi LLM / lượt (có retry mạng):</strong> Chỉ diễn đạt bản nháp sang tiếng Việt dễ đọc; nếu vi phạm mã trạm, thứ tự Top 3, rò OTP, prompt injection hay tự cộng điểm → rơi về bản nháp chuẩn.</li>
+            <li><strong>Human-in-the-Loop:</strong> Không tự đặt cọc, không trừ tiền ví, không tự cộng điểm thưởng.</li>
+          </ul>
+        </div>
+
+        <div class="feature-box">
+          <h3>3. Sạc xanh (Năng lượng tái tạo) &amp; Green Score</h3>
+          <ul>
+            <li><strong>Dữ liệu bức xạ mặt trời thật:</strong> Đọc <code>shortwave_radiation</code> (W/m²) từ Open-Meteo để gợi ý khung nắng cao thuận lợi tận dụng điện mặt trời trên lưới và điểm có mái che / biểu giá bậc giờ.</li>
+            <li><strong>Thưởng điểm minh bạch:</strong> <code>+20</code> tránh cao điểm, <code>+15</code> bức xạ cao <code>≥300 W/m²</code>, <code>+10</code> thấp điểm đêm <code>22:30–06:00</code>, <code>+10</code> giá bậc giờ / sạc nhà.</li>
+            <li><strong>Xác nhận người dùng:</strong> Chỉ ghi nhận vào <code>Green Score Leaderboard</code> khi tài xế bấm/nói xác nhận qua <code>confirm_token</code> dùng 1 lần.</li>
+          </ul>
+        </div>
+
+        <div class="feature-box">
+          <h3>4. Đo kiểm &amp; Chi phí vận hành thực tế</h3>
+          <ul>
+            <li><strong>Chất lượng đạt 100% lượt 2:</strong> <code>29/29</code> câu thử đạt (<code>9/9</code> thường, <code>17/17</code> khó, <code>3/3</code> từ chối), toàn bộ trace lưu tại <code>traces/*.jsonl</code>.</li>
+            <li><strong>Chi phí siêu thấp:</strong> Mô phỏng 50 phiên cho thấy chỉ <code>$0.00068</code>/phiên (≈ 17 ₫) — tức ≈ <strong>145 ₫/người/tháng</strong> (~550 nghìn ₫/tháng cho 3.800 người dùng cơ sở trên <code>claude-haiku-5-5</code>).</li>
+            <li><strong>API tích hợp sẵn:</strong> <code>codebase/api_server.py</code> dùng thư viện chuẩn Python, sẵn sàng nối trực tiếp với APK.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="num-pill">4</span> Những việc cần làm tiếp theo</h2>
+      <div class="grid-2">
+        <div class="roadmap-col roadmap-hack">
+          <h3>A. Hoàn tất Hackathon (CP3 → CP4)</h3>
+          <ul>
+            <li><strong>Nối app APK với backend:</strong> Deploy <code>codebase/api_server.py</code> lên Cloud (Render / Cloud Run) hoặc chạy LAN và hoàn thiện UI Voice/Chat + 5 Smart Cards trên APK.</li>
+            <li><strong>Cân bằng bằng chứng:</strong> Phỏng vấn nhanh <code>≥3</code> tài xế ô tô điện / Xanh SM (<code>evidence/interviews/P1.md–P3.md</code>) để bù độ lệch mẫu xe máy điện (<code>35/44</code>), kèm ảnh chụp luồng app thật ở <code>spec.md</code> §0.</li>
+            <li><strong>Chấm chéo &amp; đối chiếu dữ liệu:</strong> Thành viên thứ 2 chấm độc lập 5 câu vào <code>eval/README.md</code>; điền số trạm đã kiểm tay vào <code>data/DATA_CARD.md</code>.</li>
+            <li><strong>Hồ sơ nộp CP4:</strong> Cập nhật <code>README.md</code>, <code>docs/ai-usage.md</code>, xuất slide <code>demo-slides.pdf</code>, quay video demo dự phòng, test người dùng thử (<code>validation/log.md</code>) và viết <code>reflection/&lt;ten&gt;.md</code>.</li>
+          </ul>
+        </div>
+
+        <div class="roadmap-col roadmap-prod">
+          <h3>B. Mở rộng bản chạy thực tế (Production)</h3>
+          <ul>
+            <li><strong>Dữ liệu thời gian thực (Live API):</strong> Thay trạng thái trạm ô tô <code>synthetic</code> (32 trạm) và điểm sạc xe máy chưa có trạng thái (53 điểm) bằng API trực tiếp từ V-Green / EVCS / EBOOST; cập nhật Open-Meteo live mỗi giờ và dữ liệu solar áp mái tại trạm.</li>
+            <li><strong>Mở rộng xe &amp; lưu trữ bền vững:</strong> Thêm thông số các dòng xe phổ biến (<code>VF3/5/6/7/8/9</code>, <code>Feliz S</code>, <code>Klara</code>, <code>BYD Atto 3</code>, <code>Dat Bike</code>…); chuyển <code>Green Score Leaderboard</code> và phiên chat sang database (SQLite / PostgreSQL).</li>
+            <li><strong>Tối ưu thông minh nâng cao:</strong> Khi có dữ liệu phụ tải lưới và mật độ chờ theo giờ, triển khai nhánh <code>RL AGENT (PPO Split-Charge)</code> để tối ưu chia nhỏ lần sạc và điều phối tải toàn thành phố.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      CHARGEPILOT · Nhóm NhungAnhChang3Chan (Lớp L3B · Track C) · Tổng hợp ngày 27/11/2026
+    </footer>
+  </div>
+</body>
+</html>

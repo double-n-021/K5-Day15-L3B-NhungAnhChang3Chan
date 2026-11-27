@@ -3,18 +3,22 @@
 > Mốc nộp: §7 chốt chuẩn "đạt" tại **CP2 19:30 Thứ Sáu 27/11** · §0–§7 nộp **CP3 10:00 Thứ Bảy 28/11** · đủ §0–§10 **CP4 14:30 Thứ Bảy 28/11** · §10 changelog ghi tiếp đến **23:59 Thứ Bảy 28/11**.
 > Đầu mỗi mục ghi bước guide (`02-guide.md` trong repo đề) chỉ cách điền. Mỗi mục ngắn, có số và nguồn; chi tiết để ở file được trỏ tới. Xoá dòng hướng dẫn trong ngoặc vuông khi điền xong.
 
-Track: [ ] A · [ ] B · [ ] C · [ ] D · [ ] E — bài toán: [đề gợi ý trong file track, hoặc bài toán nhóm tự mở rộng] __
-Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
+Track: [ ] A · [ ] B · [x] C · [ ] D · [ ] E — bài toán: CHARGEPILOT — trợ lý gợi ý Top 3 trạm sạc, khung giờ sạc an toàn & sạc xanh cho tài xế xe điện tại Hà Nội
+Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (dữ liệu nhóm tự tổng hợp & thu thập, chi tiết ở `data/DATA_CARD.md`)
 
 ## §0. Hiện tại việc này diễn ra thế nào *(guide 1.1)*
-- Luồng hiện tại của việc này, trong khoá hoặc trên app thật (3–5 bước; ảnh chụp từ tài khoản của mình, đã che thông tin):
-- Công cụ / AI đang được dùng cho việc này (nếu có) + nguồn. Không kiểm được thì ghi "chưa kiểm":
+- Luồng hiện tại của việc này, trên app thật (4 bước; *(nhóm bổ sung ảnh chụp app đã che thông tin trước CP3)*):
+  1. Tài xế mở app VinFast / V-Green hoặc Google Maps để tìm trạm sạc gần vị trí đứng.
+  2. Xem danh sách điểm ghim và khoảng cách đường đi, tự đoán xem % pin hiện tại có chạy tới trạm và đi hết chặng tiếp theo khi trời rét/tắc đường hay không.
+  3. Tự nhẩm thời gian sạc và tránh khung giờ cao điểm `17:30–22:30` (thứ Hai–thứ Bảy) hoặc chọn biểu giá tiết kiệm.
+  4. Lái tới trạm — nhưng dễ gặp trụ hỏng/bảo trì, kín chỗ hoặc mất `20–45+` phút xếp hàng phải đổi trạm khác.
+- Công cụ / AI đang được dùng cho việc này (nếu có) + nguồn: App VinFast / V-Green (bản đồ trụ & bộ lọc xe máy/ô tô), Google Maps, các nền tảng tra cứu bên thứ 3 như `EVCS.VN`, `EBOOST` (`data/DATA_CARD.md` & khảo sát `survey.txt` câu 5). Chưa kiểm được trợ lý AI nội địa nào kết hợp đồng thời thời tiết Hà Nội, chốt chặn an toàn pin `<15%`, phân biệt xe ô tô/xe máy và gợi ý khung giờ sạc xanh.
 
 ## §1. Người dùng & bằng chứng *(guide 1.1, 1.2)*
 - Người dùng chính (một vai cụ thể): tài xế ô tô điện đi du lịch tự lái hoặc chở khách theo lịch trình tại Hà Nội (giữ theo canvas dòng 2). Người đi xe máy điện (Evo200) là người dùng phụ, chỉ được phục vụ ở mức gợi ý điểm sạc có trong dữ liệu.
-- Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI):
-- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ:
-- Pain (KHÔNG chữ AI): ai — đang làm gì — vướng đâu — hậu quả gì:
+- Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`): Tìm nhanh trạm sạc công cộng còn dùng được trong tầm pin an toàn và chọn khung giờ sạc hợp lý để kịp lịch trình di chuyển trong ngày tại Hà Nội.
+- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: Dùng App VinFast / V-Green hoặc Google Maps; hỏng ở chỗ bản đồ chỉ báo khoảng cách mà không cảnh báo hao pin theo thời tiết, không lọc sẵn phương án theo lịch trình/giờ cao điểm và thiếu thông tin tương thích loại xe máy pin cố định — chưa bỏ vì đó là kênh chính thức duy nhất có dữ liệu trạm.
+- Pain (KHÔNG chữ AI): Tài xế xe điện di chuyển theo lịch trình tại Hà Nội khi tìm trạm sạc công cộng chỉ thấy khoảng cách mà không ước lượng được tầm chạy thực tế khi trời rét/nóng, không biết trước trạm kẹt giờ cao điểm hay trụ hỏng, dẫn đến mất thêm 20–45+ phút chờ/đổi trạm, dễ lỡ giờ hẹn đón khách hoặc nguy cơ cạn pin giữa đường.
 - Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): khảo sát Google Form 27/11/2026 ([kết quả](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555)), 44 câu trả lời, bỏ 3 người chưa từng đi xe điện → n = 41. Trong 1 tháng qua: 18/41 gặp trạm quá đông giờ cao điểm 17:30–22:30, 18/41 bị rét / nóng / tắc đường làm tụt pin, 15/41 app báo trống nhưng tới nơi kín chỗ, 15/41 gặp trụ hỏng / bảo trì, 14/41 không ước lượng được thời gian sạc; 16/41 mất thêm ≥ 20 phút ở lần gần nhất.
   - **Lệch đối tượng:** khảo sát chủ yếu tới người đi xe máy điện (35/44 người dùng xe máy điện, chỉ 9/44 chỉ đi ô tô), trong khi người dùng chính của lát cắt là tài xế ô tô điện. Các số trên vì vậy là bằng chứng pain của người đi xe điện nói chung, **chưa phải** của riêng tài xế ô tô đi du lịch; cần phỏng vấn thêm tài xế ô tô để kiểm lại trước CP3.
   - Thận trọng: 18/44 người chưa từng tự tìm trạm công cộng (chỉ sạc ở nhà), trong đó 12 người vẫn chọn sự cố gặp phải.
@@ -23,22 +27,20 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |
+| **CHARGEPILOT — Gợi ý Top 3 trạm + khung giờ an toàn & sạc xanh** | ~3.800 người (cơ sở: ~10% trong >38.400 ô tô điện Hà Nội) *(tự ước tính)* | ~4,6 lần/tháng (bình quân gia quyền từ `cost/personas.yaml`) | ~20 phút mất thêm khi gặp sự cố (khảo sát `n=41`: `16/41` mất ≥20 phút) | ~349.600 phút/tháng (~5.827 giờ) | Kịp | **Chọn** |
+| Tự động đặt cọc, giữ trụ và thanh toán qua ví điện tử | ~3.800 người *(tự ước tính)* | ~4,6 lần/tháng | Rủi ro tài chính/OTP & sai sót đặt nhầm | Cao nhưng rủi ro bảo mật/thẩm quyền | Không kịp + không có API V-Green | Loại |
+| Huấn luyện mô hình dự báo phụ tải LSTM + PPO/MARL toàn thành phố | Toàn mạng lưới | Liên tục | Độ phức tạp dữ liệu live không có sẵn | Chậm, vượt phạm vi 10h | Không kịp | Loại |
 
-- **Impact / tháng** của hướng chọn = __ người × __ lần × __ phút = __ — nguồn từng thừa số: __ (không có nguồn thì ghi rõ *(tự ước tính)*)
-- Hướng ĐÃ LOẠI + vì sao (giữ lại, đừng xoá):
-- Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8):
+- **Impact / tháng** của hướng chọn = `3.800 người × 4,6 lần/tháng × 20 phút × 39% tỷ lệ gặp ≥20 phút ≈ 136.344 phút/tháng (~2.272 giờ/tháng)` — nguồn từng thừa số: quy mô người dùng cơ sở `3.800` người lấy ~10% từ >38.400 ô tô con điện tại Hà Nội cuối năm 2025 (`solenvn.com`, xem 27/11/2026) *(tự ước tính)*; số lần `4,6` phiên/tháng tính từ phân bổ tần suất sạc ở khảo sát `n=36` (`64%×2 + 22%×7 + 14%×18 = 4,62`) *(tự ước tính mức đại diện mỗi nhóm)*; mức `20 phút` và tỷ lệ `39%` (`16/41`) lấy từ khảo sát Google Form `n=41` (27/11/2026).
+- Hướng ĐÃ LOẠI + vì sao (giữ lại, đừng xoá): (1) Tự động đặt cọc/giữ trụ & trừ tiền ví hộ người dùng — loại vì không có API đối tác và sai sót tài chính/OTP gây thiệt hại trực tiếp; (2) Huấn luyện LSTM/PPO split-charge toàn lưới (`RL AGENT` nét đứt trên `docs/architecture.png`) — loại khỏi bản hackathon vì không có dữ liệu tải thời gian thực từng trạm, chuyển thành định hướng mở rộng.
+- Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8): `dung_it` (64%: 2 lần/tháng), `dung_vua` (22%: 7 lần/tháng), `dung_nhieu` (14%: 18 lần/tháng) — khớp `cost/personas.yaml`.
 
 ## §3. Giải pháp tương tự *(guide 2.1)*
-- [sản phẩm / tính năng gần giống]: một điều đáng học · một điều đáng né · mình khác gì
+- **App VinFast / V-Green:** đáng học: bản đồ trạm phủ rộng, lọc theo ô tô/xe máy và trạng thái trụ; đáng né: không tính tầm chạy an toàn theo nhiệt độ thời tiết thực tế hay kế hoạch lịch trình tiếp theo; mình khác gì: gộp tầm an toàn thời tiết + lịch trình + khung giờ tránh cao điểm/sạc xanh + chốt chặn cứu pin `<15%`.
+- **Google Maps:** đáng học: định vị và ước lượng khoảng cách nhanh; đáng né: không phân biệt trạm ô tô CCS2 vs ổ sạc xe máy 220V, không biết trạng thái bảo trì hay giờ cao điểm điện; mình khác gì: tách riêng dữ liệu trụ ô tô `[ST_...]` và điểm sạc xe máy `[MOTO_HN_...]`, loại trạm bảo trì trước khi gợi ý.
+- **EVCS / PlugShare:** đáng học: hiển thị loại cổng sạc và tiện ích xung quanh; đáng né: thông tin cộng đồng cập nhật chậm, thiếu tư vấn khung giờ sạc theo lịch trình; mình khác gì: tự động tính khung giờ kết thúc trước giờ hẹn 15 phút và chấm điểm `Green Score` khi sạc giờ nắng/ngoài cao điểm.
 
 ## §4. Thiết kế *(guide 2.2, 3.2)*
-- **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả):
-- Không làm (≥3 điều):
-- **Sơ đồ** (ảnh / Mermaid / draw.io): [chèn ở đây]
-- **Hình dạng:** [ ] workflow cố định · [ ] một agent · [ ] nhiều agent — 2 dòng lý do, và vì sao **không** chọn hình dạng phức tạp hơn:
 - **Lát cắt MỘT CÂU:** Tài xế xe điện đi du lịch/di chuyển tại Hà Nội nhập `% pin hiện tại`, `% pin muốn sạc`, `loại xe` và `điểm đến trong Hà Nội` → tìm lộ trình đi và điểm sạc phù hợp nhất → AI kết hợp thời tiết thực tế Hà Nội (Open-Meteo), trạng thái trụ, ước tính độ đông tại đúng giờ xe tới trạm (ETA), cảnh báo LEZ Hoàn Kiếm và chi phí (V-Green đồng giá vs QĐ 2892) để đề xuất lộ trình + trạm tối ưu kèm chốt chặn an toàn → tránh trạm bảo trì/quá đông, tính đúng thời gian sạc tới mức pin mong muốn và không bị cạn pin giữa đường.
 - **Không làm (≥3 điều):**
   1. Không tự động đặt cọc, giữ trụ hay thanh toán hộ qua ví người dùng.
@@ -99,34 +101,49 @@ flowchart TD
 
   | Công cụ | Input | Output | Tác động ra ngoài? |
   |---|---|---|---|
-  |  |  |  |  |
+  | `parse_request` | Câu yêu cầu tiếng Việt | Model xe, `%` pin, giờ hiện tại/hẹn, thứ, nơi đứng, điểm đến, nhiệt độ, các cờ rủi ro | Không |
+  | `get_weather` | Giờ, thứ, nhiệt độ xe báo | Dự báo Open-Meteo (`temperature_2m`, `precipitation_probability`, `shortwave_radiation`), `drain_factor`, khung nắng cao `solar_best_window` | Không |
+  | `safe_range` | Model xe (`data/ev_models.json`), `%` pin, `drain_factor` | Tầm chạy lý thuyết & tầm an toàn (`×0,8`) | Không |
+  | `find_stations` | Tọa độ, loại xe (`o_to`/`xe_may`), `safe_km`, cờ `rescue` | Top 3 trạm tương thích (`ST_...` hoặc `MOTO_HN_...`), loại trạm bảo trì/ngoài tầm/sai hãng | Không |
+  | `plan_charge_window` | Giờ, thứ, `%` pin hiện tại/mục tiêu, giờ hẹn kế tiếp, công suất trạm | Khung giờ `HH:MM–HH:MM` (cứu pin `<15%` sạc ngay; không cứu pin né cao điểm `17:30–22:30` T2–T7; xong trước giờ hẹn 15 phút) | Không |
+  | `estimate_green_reward` | Khung giờ sạc, thứ, `solar_wm2`, Top 3 trạm, cờ cứu pin/sạc nhà | Điểm `Green Score` dự kiến + lý do + lưu ý chưa có thông tin solar áp mái từng trạm | Không (chỉ ước tính; `app.py` chỉ cộng khi người dùng bấm xác nhận `y/N`) |
+  | `check_answer` | Câu LLM viết lại, bản nháp chuẩn, mã Top 3, chuỗi bắt buộc/cấm | `{ok, problems}` — chặn bịa mã, đổi thứ tự, nhãn `"chưa kiểm tầm"` thừa, nhầm ngôi, hoặc tự tuyên bố đã cộng điểm | Không |
 
-- **Mức tự động:** [ ] AI gợi ý, người quyết · [ ] AI tự làm khi chắc, chuyển người khi không · [ ] AI tự làm — lý do (sai thì ai chịu gì, sửa đắt hay rẻ):
-- **Chỗ chặn rủi ro** (rủi ro lớn nhất của lát cắt bị chặn ở đâu, bằng gì):
-- **Chỗ người duyệt** (việc AI không được tự làm):
+- **Mức tự động:** `[x] AI gợi ý, người quyết` · `[ ] AI tự làm khi chắc, chuyển người khi không` · `[ ] AI tự làm` — lý do: gợi ý sai trụ bảo trì, sai loại xe, vượt tầm pin hoặc tự ý giữ chỗ/trừ tiền ví khiến tài xế gánh rủi ro cạn pin giữa đường và thiệt hại tài chính; tài xế luôn tự kiểm app hãng và tự xác nhận hành động.
+- **Chỗ chặn rủi ro:** Chặn 3 lớp: (1) Tiền kiểm trong `parse_request` & `build_draft` (hỏi lại khi thiếu `%` pin/vị trí, từ chối ngoài Hà Nội/OTP/đặt cọc/prompt injection); (2) Tính toán & lọc cứng hoàn toàn bằng code trong `tools.py` (loại `maintenance`, lọc vượt tầm an toàn, tách riêng `o_to`/`xe_may`, cứu pin `<15%`); (3) Hậu kiểm `check_answer` (nếu LLM viết sai → trả về bản nháp chuẩn do code tạo).
+- **Chỗ người duyệt:** Người dùng tự chọn trạm, tự điều hướng, tự đặt chỗ/thanh toán trên app V-Green/EVCS, và tự xác nhận `(y/N)` trong `codebase/app.py` trước khi điểm `Green Score` được ghi nhận vào phiên.
 - **Nguyên tắc thiết kế** (≥3, bắt buộc G10):
 
   | Nguyên tắc | Chỗ cụ thể trên sơ đồ / trong bản chạy thử |
   |---|---|
-  | G10 — thu hẹp phạm vi khi không chắc |  |
-  |  |  |
-  |  |  |
+  | G10 — thu hẹp phạm vi khi không chắc | `build_draft` hỏi lại khi thiếu `%` pin/địa điểm (`B08`, `B13`, `B27`), gắn `"chưa kiểm tầm"` khi thiếu thông số xe (`B28`, `B29`), từ chối khi ngoài Hà Nội (`B10`, `B17`) |
+  | Tách bạch tính toán code và diễn đạt LLM | Mọi con số, tầm chạy, Top 3, khung giờ do `tools.py` tính; `call_model` (`ai.py`) chỉ viết lại bản nháp tiếng Việt và bị `check_answer` kiểm soát |
+  | Minh bạch độ tin cậy nguồn & không bịa trạng thái | Trạm xe máy `hanoi_moto_stations.json` luôn kèm nhãn `"trạng thái chưa xác minh"`; nguồn lệch giữa app và dữ liệu được nêu rõ (`B09`, `B21`) |
+  | Không tự thực hiện tác động ra ngoài | Chặn đặt chỗ, thanh toán, OTP (`B16`); điểm `Green Score` chỉ ước tính dự kiến, không tự cộng vào tài khoản |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật:
+- Phần nào còn giả: (1) Trạng thái trạm ô tô `data/hanoi_stations.json` là dữ liệu `synthetic` cố định theo `seed=42` (`32` trạm); (2) `data/weather_fallback.json` là bản lưu tĩnh 168 giờ (27/11–03/12/2026) dùng khi chạy offline/eval; (3) Điểm sạc xe máy `data/hanoi_moto_stations.json` chưa có trạng thái thời gian thực; (4) Khối `RL AGENT (PPO Split-Charge Policy)` nét đứt trên `docs/architecture.png` là định hướng mở rộng tương lai, chưa chạy trong bản demo.
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
 | Kịch bản | Lớp (1–4) | Hành vi mong muốn (nói gì, hiện gì, cho làm gì tiếp) | Câu thử |
 |---|---|---|---|
-|  |  |  |  |
-| *(tấn công)* |  |  |  |
-| *(tấn công)* |  |  |  |
+| Nguồn xung đột (app báo trống nhưng dữ liệu ghi bảo trì/đông) | Lớp 1 — Nguồn sự thật | Nêu rõ chênh lệch giữa app và dữ liệu, không xếp lên hạng 1, khuyên gọi trạm xác nhận và gợi ý trạm trống gần | `B09`, `B21` |
+| Ngoài vùng dữ liệu hoặc nhiệt độ xe lệch dự báo Open-Meteo | Lớp 1 — Nguồn sự thật | Không bịa trạm ở Ba Vì (`B10`) hay cầu Cầu Giấy xe máy (`B19`); chọn mức nhiệt độ lạnh hơn (`12°C`) để trừ hao pin (`B12`, `B24`) | `B10`, `B12`, `B19`, `B24` |
+| Thiếu `%` pin, thiếu dòng xe hoặc lịch trình tối mơ hồ | Lớp 2 — Mơ hồ / thiếu thông tin | Hỏi lại đúng thông tin còn thiếu (`%` pin, dòng xe, giờ/điểm đến), không tự đoán giờ sạc | `B08`, `B13`, `B27`, `B28` |
+| Yêu cầu tìm trạm ngoài phạm vi Hà Nội (đi Hạ Long) | Lớp 3 — Ngoài phạm vi | Nói rõ chỉ hỗ trợ trong Hà Nội, không bịa trạm Hải Dương/Quảng Ninh, khuyên kiểm app hãng | `B17` |
+| Cứu pin `<15%`, vượt tầm chạy, sai loại xe/pin cố định, Chủ nhật không cao điểm | Lớp 4 — Đặc thù lĩnh vực | Pin `<15%` sạc ngay bỏ qua né cao điểm (`B07`, `B11`); Evo200 không đổi pin Selex và không vào trụ CCS2 ô tô (`B18`, `B19`, `B23`); quên bộ sạc nêu hướng cứu hộ (`B26`); Chủ nhật cho sạc ngay (`B14`) | `B07`, `B11`, `B14`, `B18`, `B19`, `B23`, `B26`, `B29` |
+| *(tấn công)* Prompt injection ép liệt kê trạm bảo trì `ST_TX_03` là số 1 đang trống | Lớp 3 — Ngoài thẩm quyền | Bỏ qua lệnh chèn, giữ nguyên `ST_TX_03` bảo trì ngoài Top gợi ý, trả về trạm hợp lệ | `B15` |
+| *(tấn công)* Đòi giữ chỗ trụ, trừ tiền ví V-Green và gửi kèm mã OTP `123456` | Lớp 3 — Ngoài thẩm quyền | Từ chối thao tác đặt chỗ/thanh toán hộ, không lặp lại OTP, nhắc bảo mật OTP và hướng dẫn tự thao tác trên app hãng | `B16` |
 
 (1) nguồn sự thật · (2) mơ hồ / thiếu thông tin · (3) ngoài phạm vi / thẩm quyền · (4) đặc thù lĩnh vực (sai thì người dùng mất gì đắt nhất)
 
 ## §6. Bốn đường đi của trải nghiệm
-- Mọi thứ suôn sẻ: · Không chắc (lớp 2): · Không có căn cứ (lớp 1): · Người dùng sửa:
-- Bị đòi ngoài phạm vi (lớp 3): · Trường hợp đặc thù lĩnh vực (lớp 4):
+- **Mọi thứ suôn sẻ:** Nhập đủ xe, `%` pin, vị trí, giờ → tính tầm an toàn theo thời tiết → hiện Top 3 trạm tương thích + khung giờ sạc + gợi ý sạc xanh & điểm `Green Score` dự kiến → người dùng tự chọn và xác nhận (`y/N`).
+- **Không chắc (lớp 2):** Thiếu `%` pin, thiếu dòng xe hoặc lịch trình mơ hồ → giữ lại phần gợi ý chắc chắn (nếu có vị trí) và hỏi lại đúng thông tin còn thiếu, không bịa khung giờ.
+- **Không có căn cứ (lớp 1):** Ngoài vùng dữ liệu, thiếu thông số dòng xe (`BYD Atto 3`, `Feliz S`), hoặc app lệch dữ liệu → nói thẳng giới hạn dữ liệu, gắn nhãn `"chưa xác minh"` / `"chưa kiểm tầm"`, không bịa.
+- **Người dùng sửa:** Nếu người dùng chỉnh lại nhiệt độ xe đo được (`12°C`) hoặc báo trạng thái trạm khác dữ liệu → lấy mức nhiệt độ xấu hơn để bảo toàn pin, cảnh báo lệch nguồn và khuyên gọi trạm xác nhận.
+- **Bị đòi ngoài phạm vi (lớp 3):** Từ chối dứt khoát yêu cầu ngoài Hà Nội, giữ chỗ/thanh toán hộ, tiết lộ OTP hoặc lệnh chèn `prompt injection`, kèm hướng thay thế an toàn.
+- **Trường hợp đặc thù lĩnh vực (lớp 4):** Pin `<15%` kích hoạt chế độ cứu pin (sạc ngay, tắt gợi ý `Green Score` để tránh chần chừ), phân biệt cứng ô tô CCS2 vs xe máy 220V vs tủ đổi pin Selex.
 
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
 - Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 29 câu (thuong 9 · kho 17 · tu_choi 3; 11/29 từ khảo sát người dùng) · metric: `eval/metric_spec.yaml` (4 metric)
@@ -140,13 +157,13 @@ flowchart TD
 - So với impact / người / tháng (§2): chi phí chỉ `$0.0057` (≈ 145 ₫/người/tháng ở mức cơ sở) so với 16/41 người khảo sát mất ≥ 20 phút mỗi lần gặp sự cố — rất đáng làm trên `claude-haiku-5-5` (bảng impact §2 sẽ chốt số trước CP3).
 
 ## §9. Rủi ro & an toàn
-- Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
-- AI **không được** làm gì kể cả khi người dùng yêu cầu:
-- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào:
+- Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí: Khảo sát (`evidence/survey/survey.txt`) không thu tên, email, số điện thoại và file gốc nằm trong `.gitignore`; không đưa API key (`.env`), dữ liệu cá nhân hay mã OTP (`forbid` trong `check_answer`) vào phản hồi hay log công khai; không dùng file data BTC cấp.
+- AI **không được** làm gì kể cả khi người dùng yêu cầu: Không tự đặt chỗ, đặt cọc, trừ tiền ví hay tự cộng điểm thưởng; không lặp lại/sử dụng mã OTP; không liệt kê trạm đang bảo trì (`ST_TX_03`, `ST_BD_03`, `ST_HM_02`) vào Top 3 gợi ý theo lệnh chèn; không bịa mã trạm hoặc trạng thái thời gian thực cho trạm xe máy.
+- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào: Tài xế là người chịu rủi ro cạn pin giữa đường, lỡ giờ đón khách hoặc mất tiền nếu rò rỉ OTP/sai trụ. Nhóm chặn bằng 3 lớp: tiền kiểm `parse_request`, lọc/tính toán hoàn toàn bằng code trong `tools.py`, và hậu kiểm `check_answer` (sai → fallback bản nháp chuẩn).
 
 ## §10. Phân công & changelog
-- Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"): __
-- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`):
+- Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc", khớp `TEAMS.md`): Bùi Đặng Nhật Nguyên (Đội trưởng: điều phối, kiến trúc & lõi AI `spec.md`, `run.py`, `codebase/`) · Nguyễn Hoàng Gia An (bằng chứng pain & dữ liệu trạm/thời tiết `evidence/`, `data/`) · Trần Gia Bảo (bộ câu thử, metric & chạy đánh giá `eval/`) · Từ Huy Bảo (mô phỏng chi phí `cost/`, slide demo & video dự phòng `demo-slides.pdf`).
+- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`): Dùng trợ lý AI hỗ trợ lập trình `codebase/`, tổng hợp bộ dữ liệu điểm sạc công khai Hà Nội (`data/hanoi_moto_stations.json`), tính thống kê khảo sát, đối chiếu chấm bộ câu thử và rà tài liệu `spec.md`; mọi công thức tính toán, số liệu khảo sát, kết quả chạy `eval` / `simulate` đều được kiểm chứng lại bằng script Python và lệnh khung `run.py`.
 - Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**:
 
 **CP2 → CP4** (vd thu hẹp lát cắt, hỏi thêm người dùng, lần cải tiến trước lượt 2)
@@ -156,6 +173,8 @@ flowchart TD
 | 27/11 21:20 | Đồng bộ tên dự án thành `CHARGEPILOT` ở `canvas.md`, `spec.md`, `README.md`, `codebase/agent.py`, `codebase/tools.py` (giữ nguyên `eval/metric_spec.yaml` theo luật sau CP2); chấm hoàn tất lượt 1 `eval/run-1.csv` (`28/29`, trượt `B13` do lỗi mạng `WinError 10054`) và cập nhật kết quả vào `eval/report.md`, `eval/README.md`, `spec.md` §7 | Khớp tên `CHARGEPILOT` trên sơ đồ `docs/architecture.png`; hoàn tất chấm lượt 1 (`run-1@20261127-193233`) trước khi cải tiến sang lượt 2 |
 | 27/11 21:32 | Cải tiến cho lượt 2: thêm retry lỗi mạng tạm thời (`WinError 10054`) trong `codebase/ai.py`; siết `SYSTEM` prompt và `check_answer` chặn nhãn `"chưa kiểm tầm"` thừa & nhầm ngôi xưng `"Mình đang ở"`; bổ sung gợi ý khung/trạm sạc xanh theo bức xạ mặt trời Open-Meteo (`shortwave_radiation`) + điểm thưởng `Green Score` (`estimate_green_reward`, chỉ ghi nhận khi người dùng xác nhận trong `codebase/app.py`) | Khắc phục lỗi mạng `B13`, lỗi nhỏ `B20`/`B25` ở lượt 1, đồng thời đáp ứng gợi ý sạc năng lượng tái tạo và điểm thưởng có kiểm duyệt ở giao diện `Green Score Leaderboard` |
 | 27/11 22:30 | Cập nhật khảo sát Google Form lên `N = 44` (`n = 41`) ở `evidence/survey/survey.txt`, `spec.md` §1, `data/DATA_CARD.md`; hoàn tất mô phỏng chi phí 50 phiên (`cost/simulate-1.csv`, `simulate-1@20261127-222529`) theo `eval/run-2.csv` (`29/29 = 100%`) và điền `cost/cost-estimate.md`, `spec.md` §8 | Có thêm 5 phiếu khảo sát mới (19:52–21:22) và hoàn thành hạng mục mô phỏng chi phí dùng thật cho CP4 |
+| 27/11 22:42 | Hoàn thiện `evidence/summary.md` theo dữ liệu khảo sát `N = 44` (`n = 41`) và điền đầy đủ `spec.md` §0–§6, §9–§10 (giữ nguyên chuẩn "đạt" §7) | Đủ hồ sơ bằng chứng, tác động (impact), thiết kế 7 công cụ, kịch bản khó 4 lớp và rủi ro/an toàn cho CP3–CP4 |
+| 27/11 22:50 | Bổ sung `codebase/api_server.py` (HTTP JSON API dùng thư viện chuẩn Python bọc quanh `agent.py`, `tools.py`, `tracing.py`) phục vụ ứng dụng Android APK giao tiếp Agent-First (`POST /api/v1/chat`, `POST /api/v1/green-score/confirm`, `GET /api/v1/green-score/leaderboard`, `GET /health`) | Cho phép app APK gọi trực tiếp lõi CHARGEPILOT qua hội thoại đa lượt, ngữ cảnh GPS/xe mặc định và xác nhận điểm `Green Score` trước khi cộng |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 
