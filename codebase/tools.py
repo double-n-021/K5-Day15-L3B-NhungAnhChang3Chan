@@ -1,4 +1,4 @@
-"""Công cụ của GreenCharge Hanoi — NHÓM VIẾT (guide bước 2.2, 3.2).
+"""Công cụ của CHARGEPILOT — NHÓM VIẾT (guide bước 2.2, 3.2).
 
 Mọi quyết định an toàn nằm ở đây, bằng code, không để model tự quyết:
 lọc trạm bảo trì, kiểm tầm chạy, đúng loại xe, khung giờ sạc, từ chối. Model (agent.py) chỉ viết lại lời.
@@ -284,16 +284,18 @@ def parse_request(text: str) -> dict:
 
 @tool
 def get_weather(hour: float, weekday: int = None, user_temp_c: float = None) -> dict:
-    """Thời tiết Hà Nội theo giờ, đọc bản lưu Open-Meteo (data/weather_fallback.json) và hệ số hao pin.
+    """Thời tiết Hà Nội theo giờ, đọc bản lưu Open-Meteo (data/weather_fallback.json), bức xạ mặt trời và hệ số hao pin.
     Input: giờ (0–24), thứ (0=thứ Hai… 6=Chủ nhật, có thể None), nhiệt độ người dùng nói (°C, có thể None).
-    Output: forecast_temp_c, rain_pct, temp_used_c (lấy mức lạnh hơn), drain_factor, notes, source.
+    Output: forecast_temp_c, rain_pct, temp_used_c (lấy mức lạnh hơn), drain_factor, solar_wm2,
+            solar_peak_wm2, solar_best_window, notes, source.
     Tác động ra ngoài: không (không gọi mạng khi chạy eval — dùng bản lưu)."""
     payload = _load("weather_fallback.json") or {}
     hourly = payload.get("hourly", {})
     times = hourly.get("time", [])
     temps = hourly.get("temperature_2m", [])
     rains = hourly.get("precipitation_probability", [])
-    forecast = rain = None
+    rads = hourly.get("shortwave_radiation", [])
+    forecast = rain = solar_wm2 = solar_peak_wm2 = solar_best_window = None
     src = "không có dữ liệu thời tiết"
     if times:
         today = datetime.date.today()
@@ -308,7 +310,19 @@ def get_weather(hour: float, weekday: int = None, user_temp_c: float = None) -> 
         if key in times:
             i = times.index(key)
             forecast, rain = temps[i], (rains[i] if i < len(rains) else None)
+            solar_wm2 = float(rads[i]) if i < len(rads) and rads[i] is not None else None
             src = "Open-Meteo (bản lưu 27/11/2026), %s %s" % (want, key[11:])
+        day_rads = [(int(t[11:13]), float(rads[idx]))
+                    for idx, t in enumerate(times)
+                    if t.startswith(want + "T") and idx < len(rads) and rads[idx] is not None]
+        if day_rads:
+            solar_peak_wm2 = max(r for _, r in day_rads)
+            high_hrs = [h for h, r in day_rads if r >= 300]
+            if not high_hrs and solar_peak_wm2 >= 100:
+                thresh = max(100.0, 0.7 * solar_peak_wm2)
+                high_hrs = [h for h, r in day_rads if r >= thresh]
+            if high_hrs:
+                solar_best_window = "%dh–%dh" % (min(high_hrs), max(high_hrs) + 1)
     used = forecast
     if user_temp_c is not None and (used is None or user_temp_c < used):
         used = user_temp_c
@@ -326,7 +340,9 @@ def get_weather(hour: float, weekday: int = None, user_temp_c: float = None) -> 
         notes.append("Open-Meteo dự báo ~%s°C nhưng xe đo %s°C: tính theo mức lạnh hơn"
                      % (fmt_km(forecast), fmt_km(user_temp_c)))
     return {"forecast_temp_c": forecast, "rain_pct": rain, "temp_used_c": used,
-            "drain_factor": round(factor, 2), "notes": notes, "source": src}
+            "drain_factor": round(factor, 2), "solar_wm2": solar_wm2,
+            "solar_peak_wm2": solar_peak_wm2, "solar_best_window": solar_best_window,
+            "notes": notes, "source": src}
 
 
 # ------------------------------------------------------------------ công cụ 3: tầm chạy
@@ -375,7 +391,8 @@ def find_stations(lat: float, lon: float, vehicle_type: str, safe_km: float = No
             crowded = s.get("base_status") == "crowded"
             score = d + (2.0 if rescue else 3.0) * crowded + (0 if rescue else 0.5 * s.get("base_queue", 0))
             item = {"id": s["id"], "name": s["name"], "road_km": round(d, 2), "status": s.get("base_status"),
-                    "queue": s.get("base_queue", 0), "power_kw": s.get("power_kw"), "kind": "o_to"}
+                    "queue": s.get("base_queue", 0), "power_kw": s.get("power_kw"),
+                    "pricing_model": s.get("pricing_model"), "has_roof": bool(s.get("has_roof")), "kind": "o_to"}
         else:
             if s.get("station_type") != "charging" or s.get("operator") in MOTO_EXCLUDED_OPERATORS:
                 excluded.append((s["id"], "trạm riêng của %s / trạm đổi pin" % s.get("operator")))
@@ -449,7 +466,54 @@ def plan_charge_window(now_h: float, weekday: int, current_pct: float, target_pc
             "hours": hours, "reason": reason}
 
 
-# ------------------------------------------------------------------ công cụ 6: kiểm câu trả lời
+# ------------------------------------------------------------------ công cụ 6: ước tính sạc xanh & điểm thưởng
+
+@tool
+def estimate_green_reward(start_h: float, end_h: float, weekday: int = None, solar_wm2: float = None,
+                          top_stations: list = None, rescue: bool = False, home_charging: bool = False) -> dict:
+    """Ước tính điểm thưởng Green Score cho khung giờ sạc tiết kiệm năng lượng / thuận lợi điện mặt trời.
+    Input: giờ bắt đầu/kết thúc, thứ (0–6), bức xạ mặt trời W/m², danh sách trạm Top 3, cờ cứu pin, sạc ở nhà.
+    Output: {points, eligible, reasons, tou_station_names, roof_station_names, disclaimer}.
+    Tác động ra ngoài: không (chỉ ước tính điểm thưởng dự kiến, không tự cộng điểm vào tài khoản)."""
+    if rescue or start_h is None or end_h is None:
+        return {
+            "points": 0, "eligible": False, "reasons": [],
+            "tou_station_names": [], "roof_station_names": [],
+            "disclaimer": "Ưu tiên cứu pin an toàn, không áp dụng điểm thưởng giờ xanh.",
+        }
+    wd = weekday if weekday is not None else 0
+    points, reasons = 0, []
+    non_peak = not in_peak(start_h, wd)
+    if non_peak:
+        points += 20
+        reasons.append("+20 tránh cao điểm lưới điện 17h30–22h30")
+    if solar_wm2 is not None and solar_wm2 >= 300:
+        points += 15
+        reasons.append("+15 trùng giờ bức xạ mặt trời cao (~%d W/m² theo Open-Meteo)" % int(round(solar_wm2)))
+    h24 = start_h % 24
+    if h24 >= PEAK_END or h24 < 6.0:
+        points += 10
+        reasons.append("+10 sạc khung thấp điểm đêm 22h30–06h00")
+    tou_names = [s["name"] for s in (top_stations or []) if s.get("pricing_model") == "tou_2892"]
+    roof_names = [s["name"] for s in (top_stations or []) if s.get("has_roof")]
+    if home_charging and non_peak:
+        points += 10
+        reasons.append("+10 sạc tại nhà ngoài cao điểm bằng ổ 220V")
+    elif tou_names and non_peak:
+        points += 10
+        reasons.append("+10 có trạm biểu giá bậc giờ tiết kiệm ngoài cao điểm")
+    return {
+        "points": points,
+        "eligible": points > 0,
+        "reasons": reasons,
+        "tou_station_names": tou_names,
+        "roof_station_names": roof_names,
+        "disclaimer": "Điểm Green Score dự kiến — chỉ ghi nhận khi bạn xác nhận chọn sạc theo gợi ý "
+                      "(dữ liệu chưa có thông tin điện mặt trời áp mái riêng từng trạm).",
+    }
+
+
+# ------------------------------------------------------------------ công cụ 7: kiểm câu trả lời
 
 CODE_RE = re.compile(r"\b(ST_[A-Z]+_\d+|MOTO_HN_\d+)\b")
 
@@ -471,6 +535,13 @@ def check_answer(text: str, draft: str, top_codes: list, must_have: list, forbid
     elif pos != sorted(pos):
         problems.append("đổi thứ tự Top 3")
     low = text.lower()
+    draft_low = draft.lower()
+    if "chưa kiểm tầm" not in draft_low and "chưa kiểm tầm" in low:
+        problems.append("thêm nhãn 'chưa kiểm tầm' không có trong bản nháp")
+    if re.search(r"(?:^|[.\n])\s*mình đang ở\b", low):
+        problems.append("nhầm ngôi xưng 'Mình đang ở'")
+    if re.search(r"(?:đã cộng|đã tặng|đã ghi nhận)\s+\+?\d+\s*điểm", low) and "đã cộng" not in draft_low:
+        problems.append("tự tuyên bố đã cộng điểm thưởng")
     for s in must_have:
         if s.lower() not in low:
             problems.append("thiếu: %s" % s)
