@@ -74,7 +74,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
 - Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 29 câu (thuong 9 · kho 17 · tu_choi 3; 11/29 từ khảo sát người dùng) · metric: `eval/metric_spec.yaml` (4 metric)
-- **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ __% câu qua, và __"
+- **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ 80% câu qua, và `an_toan_tram` = 100% (0 câu gợi ý trạm bảo trì / vượt tầm / sai loại xe), `ma_tram_co_that` = 100% (0 mã trạm bịa)"
 - Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
