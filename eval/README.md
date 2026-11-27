@@ -34,8 +34,8 @@ Dataset nào, xử lý gì: tóm 2–3 dòng từ `data/DATA_CARD.md`.
 
 | Lượt | Run ID | Model | Cấu hình (prompt / công cụ / thay đổi) | Đạt / tổng | % | Đạt chuẩn? |
 |---|---|---|---|---|---|---|
-| 1 | | | | __/__ | | |
-| 2 | | | | __/__ | | |
+| 1 | `run-1@20261127-193233` | `claude-haiku-5-5` | Workflow cố định 6 tool (`codebase/agent.py`, `tools.py`) + Claude viết lại bản nháp (`effort=low`) + `check_answer` fallback | 28/29 | 96,6% | Đạt chuẩn tổng (trượt 1 câu lỗi mạng B13) |
+| 2 | `run-2@20261127-221406` | `claude-haiku-5-5` | Thêm retry mạng (`ai.py`), siết `SYSTEM` + `check_answer` (`agent.py`, `tools.py`), thêm gợi ý sạc xanh Open-Meteo + `estimate_green_reward` (`Green Score`) | 29/29 | 100% | Đạt chuẩn |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
 

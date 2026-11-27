@@ -5,6 +5,7 @@ Nhóm thay bằng giao diện của mình (web, bot…) nhưng giữ `python run
 để chạy bản chạy thử (sửa hàm run_app() trong run.py nếu cần).
 """
 import os
+import re
 import sys
 
 for _stream in (sys.stdout, sys.stderr, sys.stdin):
@@ -36,6 +37,7 @@ def main() -> int:
         return 1
     print("Bản chạy thử — gõ đầu vào rồi Enter. Thoát: Ctrl+C (hoặc Enter 2 lần với dòng trống).")
     blank = 0
+    session_green_points = 0
     while True:
         try:
             text = input("> ").strip()
@@ -60,9 +62,21 @@ def main() -> int:
             print("[lỗi] %s: %s" % (type(e).__name__, e))
             continue
         s, _ = tracing.end()
-        print(result.get("output", "") if isinstance(result, dict) else result)
+        output = result.get("output", "") if isinstance(result, dict) else result
+        print(output)
         print("   (model: %s · gọi model %d lần · công cụ %d lần · token vào %d / ra %d)"
               % (", ".join(s["models"]) or "—", s["model_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"]))
+        m_pts = re.search(r"\+(\d+)\s*điểm", output)
+        if m_pts and sys.stdin.isatty():
+            pts = int(m_pts.group(1))
+            try:
+                ans = input("Xác nhận chọn sạc theo gợi ý xanh để ghi nhận +%d điểm Green Score phiên này? (y/N): " % pts).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 0
+            if ans in ("y", "yes", "c", "co", "có"):
+                session_green_points += pts
+                print("   -> Đã ghi nhận +%d điểm (Tổng Green Score phiên này: %d điểm)." % (pts, session_green_points))
 
 
 if __name__ == "__main__":
