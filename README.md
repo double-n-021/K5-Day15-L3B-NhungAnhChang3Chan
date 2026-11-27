@@ -88,7 +88,7 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 | Thời tiết Hà Nội (`data/weather_fallback.json`) | **Thật** | Dự báo 168h từ Open-Meteo Forecast API |
 | Điểm sạc/đổi pin xe máy (`data/hanoi_moto_stations.json`) | **Thật** (nguồn công khai, không có trạng thái live) | `53` điểm tổng hợp từ 17 trang + Nominatim (`chưa xác minh` trạng thái) |
 | Thông số xe (`data/ev_models.json`) | **Thật** (công bố hãng) | `VF e34`, `Evo200` (hệ số thời tiết/biên an toàn tự ước tính) |
-| Trạm ô tô (`data/hanoi_stations.json`) & địa danh (`data/hanoi_landmarks.json`) | **Giả (`synthetic`)** | `32` trạm gắn trạng thái theo `seed=42` để kiểm logic (`191` trạm OSM crawl nằm trên nhánh `add/crawled-stations`) |
+| Trạm ô tô (`data/hanoi_stations.json`) & địa danh (`data/hanoi_landmarks.json`) | **Vị trí thật (OSM) + Trạng thái giả (`synthetic`)** | Khởi đầu `32` trạm (`seed=42`, dùng lúc chạy `eval/run-1..2`); sau PR #1 mở rộng lên `191` trạm (giữ nguyên `32` mã `ST_*` gốc + `159` vị trí OpenStreetMap Overpass API: `181` trống, `7` đông, `3` bảo trì) với trạng thái gán tĩnh |
 
 ## Dùng AI vào việc gì
 

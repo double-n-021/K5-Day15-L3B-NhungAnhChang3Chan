@@ -23,12 +23,12 @@
 | Dùng để làm gì | Nguồn cho công cụ tìm trạm: lọc trạm bảo trì, xếp hạng Top 3, đối chiếu metric `an_toan_tram` và `ma_tram_co_that` |
 | Từ đâu | Nhóm tự dựng. Tên, vị trí và đơn vị vận hành phỏng theo trạm công khai (V-Green, EV ONE, EBOOST, Esky Charge, Charge+) |
 | Xử lý những bước gì | Chuẩn hoá `lat/lon`, `power_kw`, `ports_total`, `pricing_model`, `has_roof`. Gắn `base_status` (available/crowded/maintenance) và `base_queue` cố định, ghi `seed=42` |
-| Số dòng / số đoạn | 32 trạm · 14 quận/huyện · 22 trống · 7 đông · 3 bảo trì (ST_BD_03, ST_TX_03, ST_HM_02) |
-| Phiên bản / ngày lấy | v1.0 — 27/11/2026 |
-| Nhãn | `synthetic`. **Chưa đối chiếu từng trạm** với app hãng, nên tên/toạ độ chưa được coi là thật |
-| Giới hạn | Không có API thời gian thực của đơn vị vận hành, trạng thái là cố định chứ không đổi theo giờ. Thiếu vùng ngoại thành (Ba Vì, Sơn Tây, Thạch Thất…). Chưa ghi trạm nào chỉ nhận xe VinFast |
+| Số dòng / số đoạn | Bản chạy `eval/run-1..2`: `32` trạm (`14` quận/huyện: `22` trống, `7` đông, `3` bảo trì là `ST_BD_03`, `ST_TX_03`, `ST_HM_02`). Bản mở rộng trên `main` (PR #1) cho API/demo: **`191` trạm** (`181` trống, `7` đông, `3` bảo trì — giữ nguyên đủ `32` mã `ST_*` gốc) |
+| Phiên bản / ngày lấy | v1.0 (`32` trạm) → v1.1 (`191` trạm OSM) — 27–28/11/2026 |
+| Nhãn | Vị trí `159` trạm bổ sung lấy từ OpenStreetMap Overpass API; **trạng thái toàn bộ `191` trạm là `synthetic`** (chưa có API thời gian thực từ V-Green) |
+| Giới hạn | Không có API thời gian thực của đơn vị vận hành, trạng thái là cố định chứ không đổi theo giờ. Chưa kiểm tay tại chỗ toàn bộ `191` trạm trên app V-Green |
 
-**Cách sinh (synthetic):** người dựng Nhật Nguyên · cách sinh: tự gán bằng tay theo `seed=42` (ghi trong từng dòng) · người kiểm: Nguyễn Hoàng Gia An · số dòng đã kiểm tay với app hãng: `0/32` *(giữ nguyên nhãn `synthetic` để không coi là dữ liệu thật; bản mở rộng `191` trạm crawl từ OpenStreetMap Overpass API nằm trên nhánh `add/crawled-stations`)*.
+**Cách sinh (synthetic):** người dựng Nhật Nguyên (bộ `32` trạm gốc, `seed=42`) & Từ Huy Bảo (mở rộng thêm `159` trạm crawl OpenStreetMap Overpass API trong PR #1, giữ nguyên `32` mã `ST_*` gốc) · người kiểm: Nguyễn Hoàng Gia An · số dòng đã kiểm tay tại chỗ với app hãng: `0/191` *(giữ nguyên nhãn trạng thái `synthetic` để không coi trạng thái trống/đông là dữ liệu thời gian thực)*.
 
 ## Dataset 3 · Địa điểm du lịch / điểm xuất phát (`data/hanoi_landmarks.json`)
 

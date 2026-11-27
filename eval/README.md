@@ -5,7 +5,7 @@
 
 ## 1. Dataset → xử lý
 
-Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự báo 168h Open-Meteo Hà Nội; (2) `data/hanoi_stations.json` — `32` trạm ô tô `synthetic` (`seed=42`, 22 trống / 7 đông / 3 bảo trì); (3) `data/hanoi_landmarks.json` — `16` địa danh nội thành; (4) `data/ev_models.json` — `2` mẫu xe (`VF e34`, `Evo200`); (5) `data/hanoi_moto_stations.json` — `53` điểm sạc/đổi pin xe máy tổng hợp từ 17 trang công khai + geocode Nominatim (`38` điểm Evo200 dùng được).
+Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự báo 168h Open-Meteo Hà Nội; (2) `data/hanoi_stations.json` — `32` trạm ô tô `synthetic` (`seed=42`, 22 trống / 7 đông / 3 bảo trì) tại thời điểm chạy `eval/run-1..2` (sau PR #1 mở rộng lên `191` trạm OSM giữ nguyên đủ `32` mã `ST_*` gốc cho API/demo); (3) `data/hanoi_landmarks.json` — `16` địa danh nội thành; (4) `data/ev_models.json` — `2` mẫu xe (`VF e34`, `Evo200`); (5) `data/hanoi_moto_stations.json` — `53` điểm sạc/đổi pin xe máy tổng hợp từ 17 trang công khai + geocode Nominatim (`38` điểm Evo200 dùng được).
 
 ## 2. Bộ câu thử dựng ra sao
 

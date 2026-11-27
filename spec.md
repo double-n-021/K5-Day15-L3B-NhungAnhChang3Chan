@@ -27,7 +27,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (d�
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-| **CHARGEPILOT — Gợi ý Top 3 trạm + khung giờ an toàn & sạc xanh** | ~3.800 người (cơ sở: ~10% trong >38.400 ô tô điện Hà Nội) *(tự ước tính)* | ~4,6 lần/tháng (bình quân gia quyền từ `cost/personas.yaml`) | ~20 phút mất thêm khi gặp sự cố (khảo sát `n=41`: `16/41` mất ≥20 phút) | ~349.600 phút/tháng (~5.827 giờ) | Kịp | **Chọn** |
+| **CHARGEPILOT — Gợi ý Top 3 trạm + khung giờ an toàn & sạc xanh** | ~3.800 người (cơ sở: ~10% trong >38.400 ô tô điện Hà Nội) *(tự ước tính)* | ~4,6 lần/tháng (bình quân gia quyền từ `cost/personas.yaml`) | ~20 phút mất thêm khi gặp sự cố (khảo sát `n=41`: `16/41` mất ≥20 phút) | ~136.344 phút/tháng (~2.272 giờ) | Kịp | **Chọn** |
 | Tự động đặt cọc, giữ trụ và thanh toán qua ví điện tử | ~3.800 người *(tự ước tính)* | ~4,6 lần/tháng | Rủi ro tài chính/OTP & sai sót đặt nhầm | Cao nhưng rủi ro bảo mật/thẩm quyền | Không kịp + không có API V-Green | Loại |
 | Huấn luyện mô hình dự báo phụ tải LSTM + PPO/MARL toàn thành phố | Toàn mạng lưới | Liên tục | Độ phức tạp dữ liệu live không có sẵn | Chậm, vượt phạm vi 10h | Không kịp | Loại |
 
@@ -55,44 +55,46 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (d�
 flowchart TD
     subgraph DATA["NGUỒN DỮ LIỆU (data/DATA_CARD.md)"]
         D1["Open-Meteo API thật\n+ weather_fallback.json (168h)"]
-        D2["hanoi_stations.json (32 trạm, seed=42)\n+ hanoi_landmarks.json (16 địa danh)"]
-        D3["ev_models.json\n(6 mẫu xe EV VN: pin, tầm chạy, hao pin)"]
+        D2["hanoi_stations.json (32 trạm eval → 191 trạm OSM)\n+ hanoi_moto_stations.json (53 điểm)\n+ hanoi_landmarks.json (16 địa danh)"]
+        D3["ev_models.json\n(2 mẫu xe: VF e34 & Evo200 2023)"]
     end
 
     subgraph INPUT["1. INPUT & TIỀN KIỂM (Chặn rủi ro lớp 1)"]
-        U["Đầu vào tài xế (answer(text))\n% pin hiện tại · % pin muốn sạc · loại xe · điểm đi/đến HN · giờ đi"]
-        T1["Bước 1: parse_trip_request (@tool)\nTách thông số & kiểm tra ranh giới an toàn"]
-        Q["G10: Hỏi lại thông tin thiếu\n(Thiếu % pin hoặc điểm đến — không đoán bừa)"]
-        R["Từ chối an toàn + Giải thích\n(Prompt Injection · Đặt cọc/thanh toán hộ · Ngoài HN · Thiếu trạng thái trụ)"]
+        U["Đầu vào tài xế (answer(text) / POST /api/v1/chat)\n% pin · % mục tiêu · dòng xe · nơi đứng/đến HN · giờ đi"]
+        T1["Bước 1: parse_request (@tool)\nTách thông số & kiểm tra ranh giới an toàn"]
+        Q["G10: Hỏi lại thông tin thiếu (ask_back)\n(Thiếu % pin hoặc địa điểm — không đoán bừa)"]
+        R["Từ chối an toàn + Giải thích (refusal)\n(Prompt Injection · Đặt cọc/OTP · Ngoài HN · Sai loại xe)"]
     end
 
     subgraph CORE["2. CÔNG CỤ TÍNH TOÁN & LÕI AI (Chặn rủi ro lớp 2)"]
-        T2["Bước 2: get_hanoi_weather (@tool)\nLấy nhiệt độ, GHI, xác suất mưa + hệ số hao pin"]
-        T3["Bước 3: plan_route_and_stations (@tool)\nTính tầm chạy an toàn · ETA · độ đông lúc đến · phút sạc · giá V-Green vs QĐ 2892\n[Chặn cứng: loại maintenance · lọc quá 90% tầm · cứu pin <15% · cảnh báo LEZ]"]
-        AI["Bước 4: call_model (@model_call · codebase/ai.py)\nCP2: MODEL_PROVIDER=fake · CP3: Model thật qua .env (OpenAI / Gemini)\nTổng hợp lộ trình & giải thích đánh đổi bằng tiếng Việt"]
+        T2["Bước 2: get_weather (@tool)\nLấy nhiệt độ, bức xạ nắng GHI, xác suất mưa + drain_factor"]
+        T3["Bước 3: safe_range & find_stations (@tool)\nTính tầm an toàn (×0,8) · lọc loại xe · loại maintenance · xếp hạng Top 3"]
+        T4["Bước 4: plan_charge_window & estimate_green_reward (@tool)\nChọn khung giờ né cao điểm / cứu pin <15% · ước tính Green Score (chờ duyệt y/N)"]
+        AI["Bước 5: call_model (@model_call · codebase/ai.py)\nCP2: fake · CP3–CP4: Claude (claude-haiku-5-5 qua .env)\nViết lại giải thích & đánh đổi tiếng Việt"]
     end
 
     subgraph GUARD["3. HẬU KIỂM & ĐẦU RA (Chặn rủi ro lớp 3)"]
-        T4{"Bước 5: verify_guardrails (@tool)\n100% mã [ST_...] có thật · 0% bảo trì · 0% vượt tầm?"}
-        FB["Fallback an toàn (_format_mock_output)\nXuất trực tiếp kết quả đã kiểm chứng từ tools.py"]
-        OUT["Output (Tài xế tự quyết & điều hướng)\nLộ trình · Trạm #1 & #2 · Độ đông ETA · Thời gian & Chi phí sạc · Cảnh báo"]
-        HARNESS["Tracing & Kiểm thử K5 (run.py)\ntraces/run-N.jsonl · eval/benchmark.csv · cost/simulate.py"]
+        T5{"Bước 6: check_answer (@tool)\n0 mã bịa · 0 trụ bảo trì · 0 vượt tầm · 0 lộ OTP?"}
+        FB["Fallback an toàn (_format_mock_output)\nXuất trực tiếp bản nháp đã kiểm chứng từ tools.py"]
+        OUT["Output (Tài xế tự chọn & xác nhận)\nTop 3 trạm [ST_.../MOTO_HN_...] · Khung giờ sạc · Green Score dự kiến"]
+        HARNESS["Tracing, API v1.0.0 & Kiểm thử K5 (run.py)\ntraces/run-N.jsonl · eval/benchmark.csv · cost/simulate.py · mobile/"]
     end
 
     U --> T1
-    T1 -->|"Thiếu pin / điểm đến"| Q
-    T1 -->|"Ngoài HN / Tấn công / Ngoài thẩm quyền / Thiếu data"| R
+    T1 -->|"Thiếu % pin / điểm đứng"| Q
+    T1 -->|"Ngoài HN / Prompt injection / Đặt cọc & OTP"| R
     T1 -->|"Hợp lệ"| T2
 
     D1 --> T2
     T2 --> T3
     D2 --> T3
     D3 --> T3
+    T3 --> T4
 
-    T3 --> AI
-    AI --> T4
-    T4 -->|"Đạt (ok=True)"| OUT
-    T4 -->|"Vi phạm (ok=False)"| FB --> OUT
+    T4 --> AI
+    AI --> T5
+    T5 -->|"Đạt (ok=True)"| OUT
+    T5 -->|"Vi phạm (ok=False)"| FB --> OUT
     OUT --> HARNESS
 ```
 
@@ -121,7 +123,7 @@ flowchart TD
   | Minh bạch độ tin cậy nguồn & không bịa trạng thái | Trạm xe máy `hanoi_moto_stations.json` luôn kèm nhãn `"trạng thái chưa xác minh"`; nguồn lệch giữa app và dữ liệu được nêu rõ (`B09`, `B21`) |
   | Không tự thực hiện tác động ra ngoài | Chặn đặt chỗ, thanh toán, OTP (`B16`); điểm `Green Score` chỉ ước tính dự kiến, không tự cộng vào tài khoản |
 
-- Phần nào còn giả: (1) Trạng thái trạm ô tô `data/hanoi_stations.json` là dữ liệu `synthetic` cố định theo `seed=42` (`32` trạm); (2) `data/weather_fallback.json` là bản lưu tĩnh 168 giờ (27/11–03/12/2026) dùng khi chạy offline/eval; (3) Điểm sạc xe máy `data/hanoi_moto_stations.json` chưa có trạng thái thời gian thực; (4) Khối `RL AGENT (PPO Split-Charge Policy)` nét đứt trên `docs/architecture.png` là định hướng mở rộng tương lai, chưa chạy trong bản demo.
+- Phần nào còn giả: (1) Trạng thái trạm ô tô `data/hanoi_stations.json` dùng `32` trạm `synthetic` cố định (`seed=42`) tại thời điểm chạy `eval/run-1` & `run-2`, sau đó (PR #1) mở rộng lên `191` trạm (`181` trống / `7` đông / `3` bảo trì, giữ nguyên đủ `32` mã `ST_*` gốc + `159` vị trí từ OpenStreetMap) cho API/demo — nhưng trạng thái trống/đông vẫn gắn tĩnh theo seed chứ chưa có API live từ V-Green; (2) `data/weather_fallback.json` là bản lưu tĩnh 168 giờ (27/11–03/12/2026) dùng khi chạy offline/eval; (3) Điểm sạc xe máy `data/hanoi_moto_stations.json` chưa có trạng thái thời gian thực; (4) Khối `RL AGENT (PPO Split-Charge Policy)` nét đứt trên `docs/architecture.png` là định hướng mở rộng tương lai, chưa chạy trong bản demo.
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
@@ -176,6 +178,7 @@ flowchart TD
 | 27/11 22:42 | Hoàn thiện `evidence/summary.md` theo dữ liệu khảo sát `N = 44` (`n = 41`) và điền đầy đủ `spec.md` §0–§6, §9–§10 (giữ nguyên chuẩn "đạt" §7) | Đủ hồ sơ bằng chứng, tác động (impact), thiết kế 7 công cụ, kịch bản khó 4 lớp và rủi ro/an toàn cho CP3–CP4 |
 | 27/11 22:50 | Bổ sung `codebase/api_server.py` (HTTP JSON API dùng thư viện chuẩn Python bọc quanh `agent.py`, `tools.py`, `tracing.py`) phục vụ ứng dụng Android APK giao tiếp Agent-First (`POST /api/v1/chat`, `POST /api/v1/green-score/confirm`, `GET /api/v1/green-score/leaderboard`, `GET /health`) | Cho phép app APK gọi trực tiếp lõi CHARGEPILOT qua hội thoại đa lượt, ngữ cảnh GPS/xe mặc định và xác nhận điểm `Green Score` trước khi cộng |
 | 28/11 00:30 | Hoàn thiện hồ sơ CP3: tạo bản khảo sát ẩn danh (`evidence/survey/questions.md`, `results.csv`), điền `evidence/hypothesis.md`, hoàn tất `README.md`, `eval/README.md`, `data/DATA_CARD.md`, đồng bộ `canvas.md` & `cost/cost-estimate.md`, và khoá `docs/API_CONTRACT.md` v1.0.0 | Đồng bộ toàn bộ tài liệu CP3 theo đúng kết quả khảo sát `N = 44 (n = 41)`, `eval` lượt 1–2 và mô phỏng chi phí trước hạn nộp 10:00 28/11 |
+| 28/11 01:45 | Hợp nhất mã nguồn Mobile (`mobile/`, PR #2 & PR #5 nối trực tiếp VPS API `v1.0.0`), hạ tầng CI/CD VPS (`deploy/`, `.github/workflows/build-release-apk.yml` phát hành `v1.1.0`), đồng thời sửa 5 điểm lệch tài liệu: sơ đồ Mermaid §4 khớp 7 công cụ thật, bảng Impact §2 về `~136.344 phút/tháng`, đồng bộ mốc `32 → 191` trạm ở `README.md`/`DATA_CARD.md`/`eval/README.md`/`spec.md`, điền `docs/ai-usage.md` và trỏ trích dẫn `evidence/summary.md` về `evidence/survey/results.csv` (`R05`, `R08`, `R22`, `R23`, `R29`). Giữ nguyên tuyệt đối §7, `Track C` và toàn bộ `eval/` | Rà soát chéo toàn repo trước khi phát hành `v1.1.0` & nộp CP3 theo đúng hướng dẫn khoá cứng của Lab Coach |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

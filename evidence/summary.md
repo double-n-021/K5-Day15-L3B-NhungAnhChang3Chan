@@ -34,11 +34,11 @@
 
 ## 3. ≥5 trích dẫn hoặc ví dụ nguyên văn (có nguồn, bỏ tên)
 
-1. *"Đi cả chục cái tủ đổi pin, tủ nào cũng 2, 3 ông tài xế nằm chờ pin"* — phiếu khảo sát dòng 6 (`evidence/survey/survey.txt`, tài xế xe điện dịch vụ, sạc >20 lần/tháng, mất 20–45 phút).
-2. *"Mấy chỗ đổi sạc cho loại xe tháo rời pin thì nhiều nhưng mà chỗ sạc cho loại xe không tháo rời pin được ít quá. Kèm theo là lúc nào cũng phải để sạc trong cốp xe để phòng hờ, nếu quên mang cục sạc là coi như hết cứu luôn 😭"* — phiếu khảo sát dòng 9 (`evidence/survey/survey.txt`, người đi xe máy điện cá nhân VinFast).
-3. *"Q1. Trạm sạc full"* — phiếu khảo sát dòng 30 (`evidence/survey/survey.txt`, chủ ô tô điện cá nhân VinFast, mất >45 phút ở lần gặp sự cố gần nhất).
-4. Ví dụ đa sự cố (giờ cao điểm + trụ hỏng + app báo sai + không ước lượng thời gian sạc), mất thêm `20–45 phút` — phiếu khảo sát dòng 23 (`evidence/survey/survey.txt`, người đi xe máy điện cá nhân VinFast, 11–20 lần/tháng).
-5. Ví dụ kín chỗ khi app báo trống + quá đông giờ cao điểm `17:30–22:30`, mất thêm `trên 45 phút` — phiếu khảo sát dòng 24 (`evidence/survey/survey.txt`, người đi xe máy điện Dat Bike/Yadea/Pega, 4–10 lần/tháng).
+1. *"Đi cả chục cái tủ đổi pin, tủ nào cũng 2, 3 ông tài xế nằm chờ pin"* — mã `R05` (`evidence/survey/results.csv`, tài xế xe điện dịch vụ, sạc >20 lần/tháng, mất `20–45 phút`).
+2. *"Mấy chỗ đổi sạc cho loại xe tháo rời pin thì nhiều nhưng mà chỗ sạc cho loại xe không tháo rời pin được ít quá. Kèm theo là lúc nào cũng phải để sạc trong cốp xe để phòng hờ, nếu quên mang cục sạc là coi như hết cứu luôn 😭"* — mã `R08` (`evidence/survey/results.csv`, người đi xe máy điện cá nhân VinFast).
+3. *"Q1. Trạm sạc full"* — mã `R29` (`evidence/survey/results.csv`, chủ ô tô điện cá nhân VinFast, mất `trên 45 phút` ở lần gặp sự cố gần nhất).
+4. Ví dụ đa sự cố (app báo trống nhưng tới nơi kín chỗ + trụ hỏng/bảo trì + quá đông giờ cao điểm `17:30–22:30` + không ước lượng rõ thời gian sạc), mất thêm `20–45 phút` — mã `R22` (`evidence/survey/results.csv`, người đi xe máy điện cá nhân VinFast, `11–20 lần/tháng`).
+5. Ví dụ kín chỗ khi app báo trống + quá đông giờ cao điểm `17:30–22:30`, mất thêm `trên 45 phút` — mã `R23` (`evidence/survey/results.csv`, người đi xe máy điện hãng khác, `4–10 lần/tháng`).
 
 ## 4. Các nguồn có khớp nhau không
 
