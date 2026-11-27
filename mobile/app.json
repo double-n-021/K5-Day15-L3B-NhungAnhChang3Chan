@@ -45,6 +45,19 @@
       "@maplibre/maplibre-react-native",
       "expo-image",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "expo-status-bar": {
+        "style": "light"
+      },
+      "eas": {
+        "projectId": "98028920-bf78-4b0e-ac95-5c1c5d2a67ad"
+      }
+    }
   }
 }
