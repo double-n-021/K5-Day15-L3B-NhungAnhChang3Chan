@@ -49,24 +49,24 @@ import type { JourneyStageType, MascotMood, MissingInfoField } from '@/types';
 
 const VOICE_SAMPLES = [
   {
-    id: 'noon-reward',
-    label: '“VF e34 còn 20% pin, trưa nắng 12h sạc ở đâu có điểm thưởng?”',
-    prompt: 'VF e34 còn 20% pin, trưa nắng 12h sạc ở đâu có điểm thưởng?',
+    id: 'hoan-kiem-van-mieu',
+    label: '“VF e34 còn 35%, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.”',
+    prompt: 'VF e34 còn 35%, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.',
   },
   {
-    id: 'evo200-noon',
-    label: '“Xe máy điện Evo200 còn 15% pin, trưa 12h sạc ở đâu?”',
-    prompt: 'Xe máy điện Evo200 còn 15% pin, trưa 12h sạc ở đâu?',
+    id: 'evo200-green-sunday',
+    label: '“Xe máy điện Evo200 còn 15%, đang ở Thanh Xuân lúc 11:30 Chủ nhật, sạc ở đâu có điểm xanh?”',
+    prompt: 'Xe máy điện Evo200 còn 15%, đang ở Thanh Xuân lúc 11:30 Chủ nhật, sạc ở đâu có điểm xanh?',
   },
   {
-    id: 'vung-tau-noon',
-    label: '“Tôi muốn đi Vũng Tàu lúc 11h30 trưa, còn 22% pin”',
-    prompt: 'Tôi muốn đi Vũng Tàu lúc 11h30 trưa, còn 22% pin',
+    id: 'rescue-10pct',
+    label: '“Pin còn 10%, VF e34, đang ở Phố Cổ lúc 18:00 thứ Tư” (cứu pin <15%)',
+    prompt: 'Pin còn 10%, VF e34, đang ở Phố Cổ lúc 18:00 thứ Tư',
   },
   {
-    id: 'vung-tau-missing',
-    label: '“Tôi muốn đi Vũng Tàu, xe còn 22% pin” (thử thiếu giờ)',
-    prompt: 'Tôi muốn đi Vũng Tàu, xe còn 22% pin',
+    id: 'guardrail-da-nang',
+    label: '“Pin 40%, đi Đà Nẵng sạc ở đâu?” (Test ngoài phạm vi)',
+    prompt: 'Pin 40%, đi Đà Nẵng sạc ở đâu?',
   },
 ];
 
@@ -76,9 +76,9 @@ const QUICK_FILL_CHIPS: Record<
 > = {
   destination: {
     chips: [
-      { label: 'Đi Vũng Tàu', append: ' đi Vũng Tàu' },
-      { label: 'Đi Hồ Gươm', append: ' đi Hồ Gươm' },
-      { label: 'Sạc quanh Hà Nội', append: ' sạc ở đâu có điểm thưởng' },
+      { label: 'Ở Cầu Giấy', append: ' đang ở Cầu Giấy' },
+      { label: 'Ở Hồ Hoàn Kiếm', append: ' đang ở Hồ Hoàn Kiếm' },
+      { label: 'Đi Văn Miếu', append: ' đi Văn Miếu' },
     ],
   },
   battery: {
@@ -619,6 +619,44 @@ export default function JourneyScreen() {
                     </Text>
                   </Pressable>
                 )}
+              </Animated.View>
+            )}
+
+            {/* Live AI ask_back follow-up questions & multi-turn quick replies */}
+            {!busyThinking &&
+              apiSourceMode === 'live' &&
+              lastApiResponse?.intent_state === 'ask_back' && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.missingBox}>
+                {lastApiResponse.follow_up_questions.length > 0 && (
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.warningAmber }]}>
+                    {lastApiResponse.follow_up_questions.join(' ')}
+                  </Text>
+                )}
+                <View style={styles.quickChipsRow}>
+                  {[
+                    {
+                      label: 'VF e34 · 35% · Cầu Giấy 10:00 T3',
+                      text: 'VF e34 pin 35% đang ở Cầu Giấy lúc 10:00 thứ Ba',
+                    },
+                    {
+                      label: 'Evo200 · 20% · Thanh Xuân 14:00 T7',
+                      text: 'Evo200 pin 20% đang ở Thanh Xuân lúc 14:00 thứ Bảy',
+                    },
+                  ].map((q) => (
+                    <Pressable
+                      key={q.label}
+                      onPress={() => {
+                        setPromptText(q.text);
+                        void submitNaturalText(q.text);
+                      }}
+                      style={styles.quickChip}
+                    >
+                      <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>
+                        + {q.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </Animated.View>
             )}
 

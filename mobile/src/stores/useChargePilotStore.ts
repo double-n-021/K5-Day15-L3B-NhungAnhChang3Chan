@@ -11,6 +11,8 @@ import {
   getApiWeekday,
   getDefaultApiBaseUrl,
   mapApiResponseToProposedOptions,
+  mapApiStationsToChargingStations,
+  mergeApiStationsIntoList,
   normalizeBaseUrl,
   resetChatSession,
   sendChatMessage,
@@ -411,7 +413,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     set({ apiLoading: true, apiError: null });
 
     const [originLon, originLat] = effectiveInput.origin.coordinates;
-    const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'Evo200' : 'VF e34';
+    const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
 
     try {
       const resp = await sendChatMessage(apiBaseUrl, {
@@ -444,6 +446,11 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         batteryPct: nextBattery,
       };
       const computed = recompute(nextInput, weather, activeScenarios, selectedStationId);
+      const apiChargingStations = mapApiStationsToChargingStations(resp);
+      const mergedStations = mergeApiStationsIntoList(
+        computed.effectiveStations,
+        apiChargingStations
+      );
       const options = mapApiResponseToProposedOptions(
         resp,
         nextVehicleId,
@@ -454,6 +461,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         vehicleId: nextVehicleId,
         journeyInput: nextInput,
         ...computed,
+        effectiveStations: mergedStations,
         apiStatus: 'online',
         apiSourceMode: 'live',
         apiModelName: resp.guardrails?.model || get().apiModelName,
@@ -467,6 +475,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         itineraryStatus: options.length > 0 ? 'pending' : 'none',
         selectedStationId:
           options[0]?.hanoiStationId ??
+          apiChargingStations[0]?.id ??
           computed.recommendation.recommended?.station.id ??
           selectedStationId,
       });
@@ -593,7 +602,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     set({
       activeOptionIndex: nextIdx,
       itineraryStatus: 'pending',
-      selectedStationId: nextOpt?.hanoiStationId ?? selectedStationId,
+      selectedStationId: nextOpt?.hanoiStationId ?? nextOpt?.apiStationId ?? selectedStationId,
     });
   },
 

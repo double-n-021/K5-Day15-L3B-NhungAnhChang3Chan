@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { HANOI_STATIONS } from '@/data/stations';
 import { VEHICLES } from '@/data/vehicles';
 import type {
@@ -9,10 +8,16 @@ import type {
   ApiHealthResponse,
   ApiLeaderboardResponse,
   ApiSessionResetResponse,
+  ApiStationItem,
+  ChargingBay,
+  ChargingStation,
   JourneyStage,
   ProposedItineraryOption,
+  StationStatus,
   VehicleId,
 } from '@/types';
+
+export const DEFAULT_VPS_BASE_URL = 'https://maintaining-podcast-down-coding.trycloudflare.com';
 
 export function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
@@ -26,7 +31,7 @@ export function getDefaultApiBaseUrl(): string {
   if (envUrl && envUrl.trim()) {
     return normalizeBaseUrl(envUrl);
   }
-  return Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+  return DEFAULT_VPS_BASE_URL;
 }
 
 export function generateSessionId(): string {
@@ -198,6 +203,83 @@ function matchLocalHanoiStationId(lat: number | null, lon: number | null): strin
     }
   }
   return bestId;
+}
+
+export function mapApiStatusToStationStatus(status: ApiStationItem['status']): StationStatus {
+  if (status === 'available') return 'available';
+  if (status === 'crowded') return 'busy';
+  if (status === 'maintenance') return 'maintenance';
+  return 'unknown';
+}
+
+export function mapApiStationsToChargingStations(resp: ApiChatResponse): ChargingStation[] {
+  const isMoto = resp.vehicle.vehicle_type === 'xe_may';
+  return (resp.stations || [])
+    .filter((st): st is ApiStationItem & { lat: number; lon: number } =>
+      st.lat !== null && st.lon !== null && Number.isFinite(st.lat) && Number.isFinite(st.lon)
+    )
+    .map((st) => {
+      const mappedStatus = mapApiStatusToStationStatus(st.status);
+      const powerKw = st.power_kw ?? (isMoto ? 1.2 : 60);
+      const bayStatus: ChargingBay['status'] =
+        mappedStatus === 'available'
+          ? 'available'
+          : mappedStatus === 'busy'
+            ? 'occupied'
+            : mappedStatus === 'maintenance'
+              ? 'maintenance'
+              : 'unknown';
+      const short = st.name.replace(/^Trạm sạc\s*/i, '').trim();
+
+      return {
+        id: st.id,
+        name: st.name,
+        shortName: short.length > 32 ? `${short.slice(0, 30)}…` : short || st.name,
+        operator: 'V-Green / VinFast',
+        address: st.address || `Hà Nội (cách ${st.road_km.toFixed(1)} km)`,
+        district: 'Hà Nội',
+        coordinates: [st.lon, st.lat],
+        coordinateSource: 'CHARGEPILOT Live API v1.0.0',
+        isTelemetrySimulated: true,
+        status: mappedStatus,
+        statusNote: st.status_label,
+        availableBays: mappedStatus === 'available' ? 3 : mappedStatus === 'busy' ? 1 : 0,
+        totalBays: 4,
+        queueCount: mappedStatus === 'busy' ? 2 : 0,
+        estimatedWaitMin: mappedStatus === 'busy' ? 12 : 0,
+        maxPowerKw: powerKw,
+        pricePerKwhVnd: st.pricing_model === 'tou_2892' ? 2700 : 3858,
+        parkingNote: st.has_roof ? 'Có mái che' : 'Điểm sạc công cộng Hà Nội',
+        bayLocationNote: st.address || st.status_label,
+        supportsMotorbike: isMoto,
+        supportsBatterySwap: false,
+        bays: [
+          {
+            id: `${st.id}-bay-1`,
+            code: 'TRỤ-01',
+            connector: isMoto ? 'Type 2 AC' : 'CCS2 DC',
+            powerKw,
+            status: bayStatus,
+          },
+        ],
+      };
+    });
+}
+
+export function mergeApiStationsIntoList(
+  base: ChargingStation[],
+  apiStations: ChargingStation[]
+): ChargingStation[] {
+  if (!apiStations.length) return base;
+  const filteredBase = base.filter((existing) => {
+    const [exLon, exLat] = existing.coordinates;
+    return !apiStations.some(
+      (apiSt) =>
+        apiSt.id === existing.id ||
+        haversineKm(apiSt.coordinates[1], apiSt.coordinates[0], exLat, exLon) < 0.15
+    );
+  });
+  return [...apiStations, ...filteredBase];
 }
 
 export function mapApiResponseToProposedOptions(
