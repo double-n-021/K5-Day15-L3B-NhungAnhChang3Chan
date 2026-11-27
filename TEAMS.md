@@ -6,15 +6,15 @@
 
 - Tên nhóm: NhungAnhChang3Chan
 - Lớp: L3B
-- Track: ____
+- Track: C
 - Link repo: https://github.com/double-n-021/K5-Day15-L3B-NhungAnhChang3Chan
 
 | STT | Họ và tên | Mã học viên | Vai trò | Phần việc chính |
 |---|---|---|---|---|
-| 1 | Bùi Đặng Nhật Nguyên | 2A202603937 | Đội trưởng | Đang cập nhật (chờ chốt đề tài) |
-| 2 | Nguyễn Hoàng Gia An | 2A202603799 | Thành viên | Đang cập nhật (chờ chốt đề tài) |
-| 3 | Trần Gia Bảo | 2A202603914 | Thành viên | Đang cập nhật (chờ chốt đề tài) |
-| 4 | Từ Huy Bảo | 2A202604021 | Thành viên | Đang cập nhật (chờ chốt đề tài) |
+| 1 | Bùi Đặng Nhật Nguyên | 2A202603937 | Đội trưởng | Điều phối nhóm, kiến trúc & tích hợp lõi AI (spec.md, run.py) |
+| 2 | Nguyễn Hoàng Gia An | 2A202603799 | Thành viên | Thu thập bằng chứng pain & dữ liệu trạm/thời tiết Hà Nội (evidence/, data/) |
+| 3 | Trần Gia Bảo | 2A202603914 | Thành viên | Thiết kế bộ câu thử, metric & chạy đánh giá (eval/) |
+| 4 | Từ Huy Bảo | 2A202604021 | Thành viên | Mô phỏng chi phí, slide demo & video dự phòng (cost/, demo-slides.pdf) |
 
 **Quy tắc điền**
 - **Lớp:** `L3A` hoặc `L3B`. **Track:** một chữ `A` (EdTech), `B` (Y tế), `C` (Du lịch), `D` (Thương mại điện tử), `E` (Tài chính) hoặc `F` (Làn khác). **Link repo:** link GitHub công khai của nhóm.
