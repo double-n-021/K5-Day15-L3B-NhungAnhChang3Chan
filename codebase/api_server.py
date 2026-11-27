@@ -1,5 +1,6 @@
-"""HTTP JSON API bọc quanh lõi CHARGEPILOT (agent.py, tools.py, ai.py, tracing.py) cho ứng dụng Android APK.
+"""HTTP JSON API bọc quanh lõi CHARGEPILOT (agent.py, tools.py, ai.py, tracing.py) cho Android APK, Web & CI/CD.
 
+Contract version: 1.0.0 (docs/API_CONTRACT.md).
 Chỉ dùng thư viện chuẩn Python (http.server.ThreadingHTTPServer). Không tự ý thay đổi logic an toàn hay
 thực hiện tác động ra ngoài; điểm Green Score chỉ được ghi nhận khi người dùng xác nhận qua endpoint confirm.
 
@@ -16,9 +17,22 @@ import re
 import sys
 import threading
 import time
+from urllib.parse import urlparse
 import uuid
 
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+CONTRACT_VERSION = "1.0.0"
+
 CODEBASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(CODEBASE_DIR)
+RELEASES_DIR = os.path.join(ROOT_DIR, "releases")
+APK_FILENAME = "ChargePilot-AI.apk"
+
 if CODEBASE_DIR not in sys.path:
     sys.path.insert(0, CODEBASE_DIR)
 
@@ -33,6 +47,132 @@ TRACE_LOCK = threading.Lock()
 SESSIONS: dict[str, dict] = {}
 PENDING_TOKENS: dict[str, dict] = {}
 LEADERBOARD: dict[str, dict] = {}
+
+HTML_PAGE = """<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CHARGEPILOT — API v1.0.0, Web Test &amp; Tải APK</title>
+<style>
+  :root { --bg:#f5f7f6; --card:#fff; --ink:#0f172a; --muted:#475569; --jade:#0f766e; --line:#dbe4e1; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:780px; margin:0 auto; padding:24px 16px 48px; }
+  .hero { background:#042f2e; color:#f0fdfa; border-radius:18px; padding:24px; margin-bottom:18px; }
+  .hero h1 { margin:0 0 8px; font-size:24px; }
+  .hero p { margin:0; color:#ccfbf1; font-size:14.5px; line-height:1.5; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:16px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+  .btn { display:inline-block; background:var(--jade); color:#fff; text-decoration:none; border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:14px; cursor:pointer; }
+  textarea { width:100%; min-height:84px; padding:12px; border:1px solid var(--line); border-radius:10px; font:inherit; margin:10px 0; }
+  pre { background:#0f172a; color:#e2e8f0; padding:14px; border-radius:10px; overflow:auto; white-space:pre-wrap; font-size:13px; }
+  .muted { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>CHARGEPILOT API (v1.0.0)</h1>
+    <p>Trợ lý gợi ý Top 3 trạm sạc EV &amp; khung giờ sạc tại Hà Nội cho Android APK và Web.</p>
+  </div>
+  <div class="card row">
+    <div>
+      <strong>Android APK</strong>
+      <div class="muted" id="apkStatus">Đang kiểm tra bản phát hành...</div>
+    </div>
+    <a class="btn" href="/download/ChargePilot-AI.apk">Tải ChargePilot-AI.apk</a>
+  </div>
+  <div class="card">
+    <strong>Dùng thử nhanh (POST /api/v1/chat)</strong>
+    <textarea id="q">Pin 35%, VF e34, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.</textarea>
+    <button class="btn" onclick="ask()">Gửi trợ lý</button>
+    <pre id="out">Chưa gửi yêu cầu.</pre>
+  </div>
+</div>
+<script>
+fetch('/api/release').then(r => r.json()).then(m => {
+  document.getElementById('apkStatus').textContent = m.available
+    ? (m.filename + ' (' + m.version + ', ' + m.size_mb + ' MB)')
+    : 'Chưa có file APK phát hành trong releases/';
+}).catch(() => {});
+async function ask() {
+  const out = document.getElementById('out');
+  out.textContent = 'Đang xử lý...';
+  const r = await fetch('/api/v1/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: document.getElementById('q').value})
+  });
+  const data = await r.json();
+  out.textContent = JSON.stringify(data, null, 2);
+}
+</script>
+</body>
+</html>
+"""
+
+
+def _apk_path() -> str:
+    return os.path.join(RELEASES_DIR, APK_FILENAME)
+
+
+def _release_meta() -> dict:
+    """Đọc metadata bản phát hành APK từ releases/latest.json (nếu có)."""
+    meta_path = os.path.join(RELEASES_DIR, "latest.json")
+    apk_exists = os.path.isfile(_apk_path())
+    meta: dict = {}
+    if os.path.isfile(meta_path):
+        try:
+            with open(meta_path, encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                meta = loaded
+        except Exception:
+            meta = {}
+    if apk_exists:
+        size_bytes = os.path.getsize(_apk_path())
+        meta.setdefault("filename", APK_FILENAME)
+        meta.setdefault("version", "latest")
+        meta["size_bytes"] = size_bytes
+        meta["size_mb"] = round(size_bytes / (1024 * 1024), 2)
+        meta["download_url"] = f"/download/{APK_FILENAME}"
+        meta["available"] = True
+    else:
+        meta["available"] = False
+    return meta
+
+
+def _payload_to_query(payload: dict) -> str:
+    """Chấp nhận cả text tự do (message/text/query/prompt) lẫn form có cấu trúc."""
+    for key in ("message", "text", "query", "prompt"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    parts = []
+    ev = payload.get("ev_model") or payload.get("vehicle") or payload.get("model")
+    if ev:
+        parts.append(f"Xe {ev}")
+    soc = payload.get("current_soc") if payload.get("current_soc") is not None else payload.get("battery_pct")
+    if soc is not None:
+        parts.append(f"pin còn {soc}%")
+    target = payload.get("target_soc") if payload.get("target_soc") is not None else payload.get("target_pct")
+    if target is not None:
+        parts.append(f"muốn sạc lên {target}%")
+    origin = payload.get("origin") or payload.get("location")
+    if origin:
+        parts.append(f"đang ở {origin}")
+    time_str = payload.get("time") or payload.get("departure_time")
+    if time_str:
+        parts.append(f"lúc {time_str}")
+    dest = payload.get("destination") or payload.get("next_trip")
+    if dest:
+        parts.append(f"đi {dest}")
+    extra = payload.get("note") or payload.get("weather")
+    if extra:
+        parts.append(str(extra))
+    return ", ".join(parts).strip()
 
 
 def _scrub_otp(text: str, otp_tokens: list[str]) -> str:
@@ -275,14 +415,27 @@ def _compute_structured_metadata(effective_text: str, reply_text: str, session_i
 
     tts_summary = _build_tts_summary(intent_state, stations_out, charge_window, green_reward, questions, reply_text)
 
+    safe_query = effective_text
     if f["otp"]:
         otps = agent.OTP_RE.findall(effective_text)
         reply_text = _scrub_otp(reply_text, otps)
         tts_summary = _scrub_otp(tts_summary, otps)
+        safe_query = _scrub_otp(effective_text, otps)
+
+    models_used = summary.get("models") or []
+    model_calls = summary.get("model_calls", 0)
+    tool_calls = summary.get("tool_calls", 0)
+    tokens_in = summary.get("tokens_in", 0)
+    tokens_out = summary.get("tokens_out", 0)
 
     return {
+        "ok": True,
+        "contract_version": CONTRACT_VERSION,
         "session_id": session_id,
+        "query": safe_query,
         "intent_state": intent_state,
+        "output": reply_text,
+        "reply": reply_text,
         "reply_text": reply_text,
         "tts_summary": tts_summary,
         "vehicle": v,
@@ -306,21 +459,32 @@ def _compute_structured_metadata(effective_text: str, reply_text: str, session_i
             "passed": not bool(summary.get("errors")),
             "fallback_used": fallback_used,
             "excluded_note": excluded_note,
-            "model": ", ".join(summary.get("models") or []) or ai.MODEL_PROVIDER,
-            "model_calls": summary.get("model_calls", 0),
-            "tool_calls": summary.get("tool_calls", 0),
-            "tokens_in": summary.get("tokens_in", 0),
-            "tokens_out": summary.get("tokens_out", 0),
+            "model": ", ".join(models_used) or ai.MODEL_PROVIDER,
+            "model_calls": model_calls,
+            "tool_calls": tool_calls,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
             "latency_s": round(latency_s, 3),
+        },
+        "meta": {
+            "models": models_used,
+            "model_calls": model_calls,
+            "tool_calls": tool_calls,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "latency_ms": int(round(latency_s * 1000)),
         },
     }
 
 
 def handle_chat(payload: dict) -> tuple[int, dict]:
-    """Xử lý POST /api/v1/chat và trả (http_status, response_dict)."""
-    message = str(payload.get("message") or "").strip()
+    """Xử lý POST /api/v1/chat (và /api/ask, /api/chat, /api/optimize)."""
+    message = _payload_to_query(payload)
     if not message:
-        return 400, {"error": "Thiếu trường 'message' không rỗng."}
+        return 400, {
+            "ok": False,
+            "error": "Thiếu nội dung câu hỏi (trường 'message' / 'text' hoặc thông số chuyến đi).",
+        }
 
     session_id = str(payload.get("session_id") or "").strip() or ("sess_" + uuid.uuid4().hex[:12])
     device_context = payload.get("device_context")
@@ -342,18 +506,16 @@ def handle_chat(payload: dict) -> tuple[int, dict]:
             result = agent.answer(effective_text)
         except Exception as exc:
             tracing.end()
-            return 502, {"error": f"{type(exc).__name__}: {exc}"}
+            return 502, {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         summary, events = tracing.end()
     latency_s = time.perf_counter() - t0
 
     reply_text = result.get("output", "") if isinstance(result, dict) else str(result)
     response = _compute_structured_metadata(effective_text, reply_text, session_id, summary, events, latency_s)
 
-    otps = agent.OTP_RE.findall(effective_text) if tools.parse_request(effective_text)["flags"]["otp"] else []
-    safe_saved_msg = _scrub_otp(effective_text, otps)
     with STATE_LOCK:
         SESSIONS[session_id] = {
-            "last_message": safe_saved_msg,
+            "last_message": response["query"],
             "last_state": response["intent_state"],
             "turns": (prev.get("turns", 0) + 1) if prev else 1,
         }
@@ -361,19 +523,29 @@ def handle_chat(payload: dict) -> tuple[int, dict]:
     return 200, response
 
 
+def handle_session_reset(payload: dict) -> tuple[int, dict]:
+    """Xử lý POST /api/v1/session/reset để xoá ngữ cảnh hội thoại của session_id."""
+    session_id = str(payload.get("session_id") or "").strip()
+    if not session_id:
+        return 400, {"ok": False, "error": "Thiếu 'session_id'."}
+    with STATE_LOCK:
+        cleared = SESSIONS.pop(session_id, None) is not None
+    return 200, {"ok": True, "session_id": session_id, "cleared": cleared}
+
+
 def handle_green_confirm(payload: dict) -> tuple[int, dict]:
     """Xử lý POST /api/v1/green-score/confirm (chỉ cộng điểm khi người dùng xác nhận)."""
     token = str(payload.get("confirm_token") or "").strip()
     user_name = str(payload.get("user_name") or "Driver").strip() or "Driver"
     if not token:
-        return 400, {"error": "Thiếu 'confirm_token'."}
+        return 400, {"ok": False, "error": "Thiếu 'confirm_token'."}
 
     with STATE_LOCK:
         entry = PENDING_TOKENS.get(token)
         if not entry:
-            return 404, {"error": "confirm_token không tồn tại hoặc đã hết hạn."}
+            return 404, {"ok": False, "error": "confirm_token không tồn tại hoặc đã hết hạn."}
         if entry["claimed"]:
-            return 409, {"error": "confirm_token đã được xác nhận trước đó."}
+            return 409, {"ok": False, "error": "confirm_token đã được xác nhận trước đó."}
         entry["claimed"] = True
         pts = entry["points"]
         user = LEADERBOARD.setdefault(user_name, {"user_name": user_name, "total_points": 0, "green_sessions": 0})
@@ -405,16 +577,55 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         sys.stderr.write("[API] %s - %s\n" % (self.address_string(), format % args))
 
+    def _send_cors_headers(self) -> None:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
     def _send_json(self, status: int, body: dict | list) -> None:
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(raw)
+
+    def _send_html(self, status: int, html: str) -> None:
+        raw = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def _serve_apk(self, head_only: bool = False) -> None:
+        path = _apk_path()
+        if not os.path.isfile(path):
+            if head_only:
+                self.send_response(404)
+                self._send_cors_headers()
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._send_json(404, {"ok": False, "error": "Chưa có file APK nào được phát hành trên VPS."})
+            return
+        size = os.path.getsize(path)
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/vnd.android.package-archive")
+        self.send_header("Content-Disposition", f'attachment; filename="{APK_FILENAME}"')
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+        if head_only:
+            return
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
     def _read_json(self) -> dict | None:
         try:
@@ -432,42 +643,71 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self._send_cors_headers()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_HEAD(self) -> None:
+        path = urlparse(self.path).path
+        if path in (f"/download/{APK_FILENAME}", "/download/latest.apk"):
+            self._serve_apk(head_only=True)
+            return
+        ok_paths = ("/", "/health", "/api/release", "/api/v1/green-score/leaderboard")
+        self.send_response(200 if path in ok_paths else 404)
+        self._send_cors_headers()
         self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self) -> None:
-        path = self.path.split("?", 1)[0]
+        path = urlparse(self.path).path
+        if path == "/":
+            self._send_html(200, HTML_PAGE)
+            return
         if path == "/health":
+            meta = _release_meta()
+            model_val = ai.MODEL_NAME or ("fake" if ai.MODEL_PROVIDER == "fake" else "")
             self._send_json(200, {
+                "ok": True,
                 "status": "ok",
                 "service": "CHARGEPILOT API",
+                "contract_version": CONTRACT_VERSION,
                 "model_provider": ai.MODEL_PROVIDER,
-                "model": ai.MODEL_NAME or "fake",
+                "model": model_val,
+                "model_name": model_val,
+                "apk_available": meta.get("available", False),
+                "apk_meta": meta,
             })
             return
-        if path == "/api/v1/green-score/leaderboard":
-            self._send_json(200, {"leaderboard": get_leaderboard()})
+        if path == "/api/release":
+            self._send_json(200, _release_meta())
             return
-        self._send_json(404, {"error": f"Không tìm thấy đường dẫn {path}"})
+        if path in (f"/download/{APK_FILENAME}", "/download/latest.apk"):
+            self._serve_apk(head_only=False)
+            return
+        if path == "/api/v1/green-score/leaderboard":
+            self._send_json(200, {"ok": True, "leaderboard": get_leaderboard()})
+            return
+        self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
 
     def do_POST(self) -> None:
-        path = self.path.split("?", 1)[0]
+        path = urlparse(self.path).path
         payload = self._read_json()
         if payload is None:
-            self._send_json(400, {"error": "Body phải là JSON object hợp lệ."})
+            self._send_json(400, {"ok": False, "error": "Body phải là JSON object hợp lệ."})
             return
-        if path == "/api/v1/chat":
+        if path in ("/api/v1/chat", "/api/chat", "/api/ask", "/api/optimize"):
             status, resp = handle_chat(payload)
+            self._send_json(status, resp)
+            return
+        if path == "/api/v1/session/reset":
+            status, resp = handle_session_reset(payload)
             self._send_json(status, resp)
             return
         if path == "/api/v1/green-score/confirm":
             status, resp = handle_green_confirm(payload)
             self._send_json(status, resp)
             return
-        self._send_json(404, {"error": f"Không tìm thấy đường dẫn {path}"})
+        self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
 
 
 def create_server(host: str = "0.0.0.0", port: int = 8000) -> ThreadingHTTPServer:
@@ -476,13 +716,15 @@ def create_server(host: str = "0.0.0.0", port: int = 8000) -> ThreadingHTTPServe
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CHARGEPILOT HTTP JSON API cho Android APK")
-    parser.add_argument("--host", default="0.0.0.0", help="Host lắng nghe (mặc định 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8000, help="Cổng lắng nghe (mặc định 8000)")
+    default_host = os.environ.get("API_HOST", "0.0.0.0")
+    default_port = int(os.environ.get("PORT", os.environ.get("API_PORT", "8000")))
+    parser = argparse.ArgumentParser(description="CHARGEPILOT HTTP JSON API cho Android APK, Web & CI/CD")
+    parser.add_argument("--host", default=default_host, help=f"Host lắng nghe (mặc định {default_host})")
+    parser.add_argument("--port", type=int, default=default_port, help=f"Cổng lắng nghe (mặc định {default_port})")
     args = parser.parse_args()
 
     server = create_server(args.host, args.port)
-    print(f"CHARGEPILOT API đang chạy tại http://127.0.0.1:{args.port} "
+    print(f"CHARGEPILOT API v{CONTRACT_VERSION} đang chạy tại http://{args.host}:{args.port} "
           f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER}")
     try:
         server.serve_forever()
