@@ -1,0 +1,457 @@
+import { create } from 'zustand';
+import { DEMO_SEQUENCE } from '@/data/presets';
+import { HANOI_PLACES, HANOI_STATIONS } from '@/data/stations';
+import { HANOI_WEATHER_STATES } from '@/data/weather';
+import {
+  applyScenariosToState,
+  evaluateChargingDecision,
+  generateItineraryOptionsForRequest,
+  minutesToTime,
+  parseAndValidateNaturalRequest,
+  parseVietnameseJourneyPrompt,
+  timeToMinutes,
+} from '@/services/decisionEngine';
+import type {
+  ChargingPreference,
+  ChargingStation,
+  ItineraryDecisionStatus,
+  JourneyInput,
+  ParsedNaturalRequest,
+  ProposedItineraryOption,
+  RecommendationResult,
+  VehicleId,
+  WeatherCondition,
+  WhatIfScenarioId,
+} from '@/types';
+
+interface ChargePilotState {
+  vehicleId: VehicleId;
+  journeyInput: JourneyInput;
+  weather: WeatherCondition;
+  activeScenarios: WhatIfScenarioId[];
+  selectedStationId: string;
+  mapStyleMode: 'dark' | 'light';
+  is3DBuildings: boolean;
+
+  // Derived computed slices
+  effectiveStations: ChargingStation[];
+  effectiveWeather: WeatherCondition;
+  effectiveInput: JourneyInput;
+  trafficMultiplier: number;
+  baselineRecommendation: RecommendationResult;
+  recommendation: RecommendationResult;
+
+  // Natural-language AI Trip Planner state (user-driven, no forced default)
+  parsedRequest: ParsedNaturalRequest | null;
+  proposedOptions: ProposedItineraryOption[];
+  activeOptionIndex: number;
+  itineraryStatus: ItineraryDecisionStatus;
+
+  // Green Off-Peak Points (Trưa nắng / Thấp điểm)
+  greenPoints: number;
+  creditedOptionIds: string[];
+  rewardHistory: { id: string; title: string; points: number; time: string }[];
+  voiceDrawerTrigger: number;
+
+  // Demo Hackathon Mode
+  isDemoActive: boolean;
+  isDemoPlaying: boolean;
+  demoStepIndex: number; // 0 .. DEMO_SEQUENCE.length - 1
+
+  // Actions
+  setVehicleId: (id: VehicleId) => void;
+  setBatteryPct: (pct: number) => void;
+  setArrivalDeadline: (hhmm: string) => void;
+  shiftArrivalDeadline: (deltaMin: number) => void;
+  setPreference: (pref: ChargingPreference) => void;
+  setHasNextDestination: (enabled: boolean) => void;
+  applyNaturalLanguagePrompt: (prompt: string) => void;
+  analyzeNaturalPrompt: (prompt: string) => ParsedNaturalRequest;
+  acceptProposedItinerary: () => void;
+  declineProposedItinerary: () => void;
+  requestAlternativeOption: () => void;
+  triggerVoiceAssistant: () => void;
+  selectStation: (stationId: string) => void;
+  toggleScenario: (scenarioId: WhatIfScenarioId) => void;
+  clearScenarios: () => void;
+  setScenarios: (scenarios: WhatIfScenarioId[]) => void;
+  toggleMapStyle: () => void;
+  toggle3DBuildings: () => void;
+  setWeatherCondition: (weatherId: WeatherCondition['id']) => void;
+
+  // Demo controls
+  startDemo: () => void;
+  stopDemo: () => void;
+  toggleDemoPlay: () => void;
+  setDemoStep: (index: number) => void;
+  nextDemoStep: () => void;
+  restartDemo: () => void;
+}
+
+const DEFAULT_INPUT: JourneyInput = {
+  rawPrompt: 'Tôi còn 18% pin, 14h30 phải có mặt tại Hồ Gươm và sau đó đi sân bay Nội Bài.',
+  vehicleId: 'vfe34',
+  batteryPct: 18,
+  origin: HANOI_PLACES.langHa,
+  primaryDestination: HANOI_PLACES.hoGuom,
+  arrivalDeadline: '14:30',
+  nextDestination: HANOI_PLACES.noiBai,
+  nextDepartureTime: '16:15',
+  departureTime: '13:40',
+  preference: 'balanced',
+};
+
+const DEFAULT_WEATHER = HANOI_WEATHER_STATES.overcast_cool;
+
+function recompute(
+  input: JourneyInput,
+  weather: WeatherCondition,
+  scenarios: WhatIfScenarioId[],
+  selectedStationId: string
+) {
+  const baselineRecommendation = evaluateChargingDecision({
+    input,
+    weather,
+    stations: HANOI_STATIONS,
+    trafficMultiplier: 1.0,
+  });
+
+  const {
+    stations: effectiveStations,
+    weather: effectiveWeather,
+    input: effectiveInput,
+    trafficMultiplier,
+  } = applyScenariosToState(
+    HANOI_STATIONS,
+    weather,
+    input,
+    scenarios,
+    baselineRecommendation.recommended?.station.id ?? selectedStationId
+  );
+
+  const recommendation = evaluateChargingDecision({
+    input: effectiveInput,
+    weather: effectiveWeather,
+    stations: effectiveStations,
+    trafficMultiplier,
+  });
+
+  return {
+    effectiveStations,
+    effectiveWeather,
+    effectiveInput,
+    trafficMultiplier,
+    baselineRecommendation,
+    recommendation,
+  };
+}
+
+const initialComputed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, [], 'metropolis');
+
+export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
+  vehicleId: DEFAULT_INPUT.vehicleId,
+  journeyInput: DEFAULT_INPUT,
+  weather: DEFAULT_WEATHER,
+  activeScenarios: [],
+  selectedStationId: initialComputed.recommendation.recommended?.station.id ?? 'metropolis',
+  mapStyleMode: 'dark',
+  is3DBuildings: true,
+
+  ...initialComputed,
+
+  parsedRequest: null,
+  proposedOptions: [],
+  activeOptionIndex: 0,
+  itineraryStatus: 'none',
+
+  greenPoints: 120,
+  creditedOptionIds: [],
+  rewardHistory: [
+    {
+      id: 'init-noon',
+      title: 'Sạc khung trưa nắng 12:15 tại Metropolis',
+      points: 80,
+      time: 'Hôm qua',
+    },
+    {
+      id: 'init-offpeak',
+      title: 'Sạc trạm vắng tại Vincom Bà Triệu',
+      points: 40,
+      time: '3 ngày trước',
+    },
+  ],
+  voiceDrawerTrigger: 0,
+
+  isDemoActive: false,
+  isDemoPlaying: false,
+  demoStepIndex: 0,
+
+  setVehicleId: (id) => {
+    const nextInput = { ...get().journeyInput, vehicleId: id };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      vehicleId: id,
+      journeyInput: nextInput,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? get().selectedStationId,
+    });
+  },
+
+  setBatteryPct: (pct) => {
+    const clamped = Math.max(5, Math.min(100, Math.round(pct)));
+    const nextInput = { ...get().journeyInput, batteryPct: clamped };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      journeyInput: nextInput,
+      ...computed,
+    });
+  },
+
+  setArrivalDeadline: (hhmm) => {
+    const nextInput = { ...get().journeyInput, arrivalDeadline: hhmm };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      journeyInput: nextInput,
+      ...computed,
+    });
+  },
+
+  shiftArrivalDeadline: (deltaMin) => {
+    const currentMin = timeToMinutes(get().journeyInput.arrivalDeadline);
+    const updated = minutesToTime(currentMin + deltaMin);
+    get().setArrivalDeadline(updated);
+  },
+
+  setPreference: (pref) => {
+    const nextInput = { ...get().journeyInput, preference: pref };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      journeyInput: nextInput,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? get().selectedStationId,
+    });
+  },
+
+  setHasNextDestination: (enabled) => {
+    const nextInput = {
+      ...get().journeyInput,
+      nextDestination: enabled ? HANOI_PLACES.noiBai : null,
+    };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      journeyInput: nextInput,
+      ...computed,
+    });
+  },
+
+  applyNaturalLanguagePrompt: (prompt) => {
+    const patch = parseVietnameseJourneyPrompt(prompt, get().journeyInput);
+    const nextInput = { ...get().journeyInput, ...patch };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      vehicleId: nextInput.vehicleId,
+      journeyInput: nextInput,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? get().selectedStationId,
+    });
+  },
+
+  analyzeNaturalPrompt: (prompt) => {
+    const parsed = parseAndValidateNaturalRequest(prompt);
+    if (!parsed.isComplete) {
+      set({
+        parsedRequest: parsed,
+        proposedOptions: [],
+        activeOptionIndex: 0,
+        itineraryStatus: 'none',
+      });
+      return parsed;
+    }
+
+    const nextBattery = parsed.batteryPct ?? get().journeyInput.batteryPct;
+    const nextInput: JourneyInput = {
+      ...get().journeyInput,
+      rawPrompt: prompt,
+      batteryPct: nextBattery,
+      arrivalDeadline: parsed.timeText ?? get().journeyInput.arrivalDeadline,
+      nextDestination: parsed.nextDestinationName ? HANOI_PLACES.noiBai : null,
+    };
+
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    const options = generateItineraryOptionsForRequest({
+      parsed,
+      hanoiResult: computed.recommendation,
+      vehicleId: get().vehicleId,
+      weather: computed.effectiveWeather,
+    });
+
+    set({
+      journeyInput: nextInput,
+      ...computed,
+      parsedRequest: parsed,
+      proposedOptions: options,
+      activeOptionIndex: 0,
+      itineraryStatus: options.length > 0 ? 'pending' : 'none',
+      selectedStationId:
+        options[0]?.hanoiStationId ??
+        computed.recommendation.recommended?.station.id ??
+        get().selectedStationId,
+    });
+
+    return parsed;
+  },
+
+  acceptProposedItinerary: () => {
+    const {
+      proposedOptions,
+      activeOptionIndex,
+      selectedStationId,
+      greenPoints,
+      creditedOptionIds,
+      rewardHistory,
+    } = get();
+    const active = proposedOptions[activeOptionIndex];
+    const pts = active?.reward.points ?? 0;
+    const shouldCredit = active && pts > 0 && !creditedOptionIds.includes(active.id);
+
+    set({
+      itineraryStatus: 'accepted',
+      selectedStationId: active?.hanoiStationId ?? selectedStationId,
+      greenPoints: shouldCredit ? greenPoints + pts : greenPoints,
+      creditedOptionIds: shouldCredit ? [...creditedOptionIds, active.id] : creditedOptionIds,
+      rewardHistory: shouldCredit
+        ? [
+            {
+              id: active.id,
+              title: `${active.reward.label} · ${active.stationName}`,
+              points: pts,
+              time: 'Vừa nhận',
+            },
+            ...rewardHistory,
+          ]
+        : rewardHistory,
+    });
+  },
+
+  declineProposedItinerary: () => {
+    set({
+      itineraryStatus: 'declined',
+    });
+  },
+
+  requestAlternativeOption: () => {
+    const { proposedOptions, activeOptionIndex, selectedStationId } = get();
+    if (proposedOptions.length === 0) return;
+    const nextIdx = (activeOptionIndex + 1) % proposedOptions.length;
+    const nextOpt = proposedOptions[nextIdx];
+    set({
+      activeOptionIndex: nextIdx,
+      itineraryStatus: 'pending',
+      selectedStationId: nextOpt?.hanoiStationId ?? selectedStationId,
+    });
+  },
+
+  triggerVoiceAssistant: () =>
+    set((s) => ({ voiceDrawerTrigger: s.voiceDrawerTrigger + 1 })),
+
+  selectStation: (stationId) => set({ selectedStationId: stationId }),
+
+  toggleScenario: (scenarioId) => {
+    const prev = get().activeScenarios;
+    const next = prev.includes(scenarioId)
+      ? prev.filter((id) => id !== scenarioId)
+      : [...prev, scenarioId];
+    const computed = recompute(get().journeyInput, get().weather, next, get().selectedStationId);
+    set({
+      activeScenarios: next,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? get().selectedStationId,
+    });
+  },
+
+  clearScenarios: () => {
+    const computed = recompute(get().journeyInput, get().weather, [], get().selectedStationId);
+    set({
+      activeScenarios: [],
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? 'metropolis',
+    });
+  },
+
+  setScenarios: (scenarios) => {
+    const computed = recompute(get().journeyInput, get().weather, scenarios, get().selectedStationId);
+    set({
+      activeScenarios: scenarios,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? get().selectedStationId,
+    });
+  },
+
+  toggleMapStyle: () =>
+    set((s) => ({ mapStyleMode: s.mapStyleMode === 'dark' ? 'light' : 'dark' })),
+
+  toggle3DBuildings: () => set((s) => ({ is3DBuildings: !s.is3DBuildings })),
+
+  setWeatherCondition: (weatherId) => {
+    const nextWeather = HANOI_WEATHER_STATES[weatherId];
+    const computed = recompute(
+      get().journeyInput,
+      nextWeather,
+      get().activeScenarios,
+      get().selectedStationId
+    );
+    set({
+      weather: nextWeather,
+      ...computed,
+    });
+  },
+
+  startDemo: () => {
+    const computed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, [], 'metropolis');
+    set({
+      vehicleId: DEFAULT_INPUT.vehicleId,
+      journeyInput: DEFAULT_INPUT,
+      weather: DEFAULT_WEATHER,
+      activeScenarios: [],
+      ...computed,
+      selectedStationId: 'metropolis',
+      isDemoActive: true,
+      isDemoPlaying: true,
+      demoStepIndex: 0,
+    });
+  },
+
+  stopDemo: () => set({ isDemoActive: false, isDemoPlaying: false }),
+
+  toggleDemoPlay: () => set((s) => ({ isDemoPlaying: !s.isDemoPlaying })),
+
+  setDemoStep: (index) => {
+    const clamped = Math.max(0, Math.min(DEMO_SEQUENCE.length - 1, index));
+    const step = DEMO_SEQUENCE[clamped];
+    let scenarios: WhatIfScenarioId[] = [];
+    if (step.stepNumber >= 10) {
+      scenarios = ['station_maintenance'];
+    }
+    const computed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, scenarios, 'metropolis');
+    set({
+      vehicleId: DEFAULT_INPUT.vehicleId,
+      journeyInput: DEFAULT_INPUT,
+      weather: DEFAULT_WEATHER,
+      activeScenarios: scenarios,
+      ...computed,
+      selectedStationId: computed.recommendation.recommended?.station.id ?? 'ba-trieu',
+      demoStepIndex: clamped,
+    });
+  },
+
+  nextDemoStep: () => {
+    const { demoStepIndex } = get();
+    if (demoStepIndex < DEMO_SEQUENCE.length - 1) {
+      get().setDemoStep(demoStepIndex + 1);
+    } else {
+      set({ isDemoPlaying: false });
+    }
+  },
+
+  restartDemo: () => get().startDemo(),
+}));
