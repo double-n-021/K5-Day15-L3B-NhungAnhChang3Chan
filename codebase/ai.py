@@ -17,7 +17,10 @@ Chế độ giả (mặc định khi .env chưa có MODEL_PROVIDER, hoặc MODEL
 Nối model thật: điền .env (chép từ .env.example), rồi viết nhánh gọi API ở dưới theo docs/connect-model.md
 (có ví dụ OpenAI, Claude, model chạy trên máy, và cách nối nhà cung cấp khác). Không dán API key vào file này.
 """
+import json
 import os
+import urllib.error
+import urllib.request
 
 from tracing import model_call
 
@@ -41,6 +44,36 @@ load_env()
 MODEL_PROVIDER = (os.environ.get("MODEL_PROVIDER") or "fake").strip().lower()
 MODEL_NAME = (os.environ.get("MODEL_NAME") or "").strip()
 API_KEY = (os.environ.get("API_KEY") or "").strip()
+URL_CLAUDE = "https://api.anthropic.com/v1/messages"
+
+
+def post_json(url, headers, body, timeout=90):
+    """Gửi POST JSON, trả về JSON phản hồi. Chỉ dùng thư viện chuẩn (urllib)."""
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"), method="POST",
+        headers=dict({"Content-Type": "application/json"}, **headers))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+
+
+def call_claude(system, user):
+    """Claude Messages API. Việc của model ở đây chỉ là viết lại bản nháp → effort thấp cho rẻ và nhanh.
+    max_tokens 4096: Haiku 5.5 bật suy nghĩ mặc định, token suy nghĩ tính vào output_tokens và vào giới hạn này."""
+    data = post_json(URL_CLAUDE,
+                     {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"},
+                     {"model": MODEL_NAME, "max_tokens": 4096, "system": system or "",
+                      "output_config": {"effort": "low"},
+                      "messages": [{"role": "user", "content": user}]})
+    u = data["usage"]
+    tokens_in = u["input_tokens"] + u.get("cache_creation_input_tokens", 0) + u.get("cache_read_input_tokens", 0)
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    # bị từ chối hoặc bị cụt giữa chừng → trả chữ rỗng để agent.py dùng bản nháp (token vẫn được tính)
+    if data.get("stop_reason") in ("refusal", "max_tokens"):
+        text = ""
+    return {"text": text, "tokens_in": tokens_in, "tokens_out": u["output_tokens"]}
 
 
 @model_call
@@ -48,9 +81,11 @@ def call_model(system: str, user: str) -> dict:
     if MODEL_PROVIDER == "fake":
         last = (user.strip().splitlines() or [""])[-1]
         return {"text": "[câu trả lời giả — chưa nối model] " + last[:60], "model": "fake", "tokens_in": 0, "tokens_out": 0}
-
-    # NHÓM VIẾT: gọi model thật ở đây (theo MODEL_PROVIDER, MODEL_NAME, API_KEY) rồi trả đúng 4 khoá.
-    # Ví dụ chép được cho từng nhà cung cấp: docs/connect-model.md mục 2.
-    raise NotImplementedError(
-        "chưa viết phần gọi model thật cho MODEL_PROVIDER=%s trong codebase/ai.py — xem docs/connect-model.md"
-        % MODEL_PROVIDER)
+    if MODEL_PROVIDER == "anthropic":
+        r = call_claude(system, user)
+    else:
+        raise NotImplementedError(
+            "chưa viết phần gọi model cho MODEL_PROVIDER=%s trong codebase/ai.py — xem docs/connect-model.md"
+            % MODEL_PROVIDER)
+    return {"text": r["text"], "model": MODEL_NAME,
+            "tokens_in": int(r["tokens_in"]), "tokens_out": int(r["tokens_out"])}

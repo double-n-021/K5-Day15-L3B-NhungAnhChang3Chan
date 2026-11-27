@@ -258,6 +258,9 @@ def answer(text: str) -> dict:
     if reply.get("model") == "fake":
         note("dừng: model giả — trả bản nháp do code tạo")
         return {"output": draft}
+    if not reply["text"].strip():
+        note("dừng: model trả chữ rỗng (từ chối / bị cụt) — trả bản nháp")
+        return {"output": draft}
     verdict = check_answer(reply["text"], draft, top_codes, must, forbid)
     if not verdict["ok"]:
         note("dừng: câu model không qua check_answer (%s) — trả bản nháp" % "; ".join(verdict["problems"]))
