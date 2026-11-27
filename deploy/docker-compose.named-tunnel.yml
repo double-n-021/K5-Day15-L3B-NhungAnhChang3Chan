@@ -1,0 +1,6 @@
+# Tùy chọn nâng cấp: dùng Cloudflare Named Tunnel để link https:// cố định không đổi sau khi restart VPS.
+# Cách chạy (sau khi thêm CLOUDFLARE_TUNNEL_TOKEN=... vào file .env trên VPS):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.named-tunnel.yml up -d --build
+services:
+  tunnel:
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
