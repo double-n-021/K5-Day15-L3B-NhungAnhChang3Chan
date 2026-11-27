@@ -7,9 +7,9 @@
 
 | Nguồn | Đạt ngưỡng? | File |
 |---|---|---|
-| Đào data (x/N, %, cách đếm chạy lại được, ≥5 ví dụ) | ☐ | `evidence/data-mining.md` *(chưa làm)* |
-| Phỏng vấn (≥3 người ngoài nhóm, đúng người dùng) | ☐ | `evidence/interviews/TEMPLATE.md` *(chưa làm — khuyến nghị phỏng vấn thêm ≥3 tài xế ô tô điện trước CP3)* |
-| Khảo sát (≥20 người ngoài nhóm, đúng người dùng) | ☑ | `evidence/survey/survey.txt` (`N = 44`, bỏ 3 chưa đi xe điện → `n = 41`) · [Google Sheets](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555) |
+| Đào data (x/N, %, cách đếm chạy lại được, ≥5 ví dụ) | ☐ | *(Không sử dụng — đã xoá `evidence/data-mining.md` theo hướng dẫn khung)* |
+| Phỏng vấn (≥3 người ngoài nhóm, đúng người dùng) | ☐ | `evidence/interviews/TEMPLATE.md` *(chưa thực hiện; dự kiến kiểm chéo riêng nhóm tài xế ô tô điện trước CP4)* |
+| Khảo sát (≥20 người ngoài nhóm, đúng người dùng) | ☑ | `evidence/survey/questions.md` · `evidence/survey/results.csv` (bản ẩn danh từ `survey.txt`: `N = 44`, `n = 41`) · [Google Sheets](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555) |
 
 ## 2. Số chính
 

@@ -28,7 +28,7 @@
 | Nhãn | `synthetic`. **Chưa đối chiếu từng trạm** với app hãng, nên tên/toạ độ chưa được coi là thật |
 | Giới hạn | Không có API thời gian thực của đơn vị vận hành, trạng thái là cố định chứ không đổi theo giờ. Thiếu vùng ngoại thành (Ba Vì, Sơn Tây, Thạch Thất…). Chưa ghi trạm nào chỉ nhận xe VinFast |
 
-**Cách sinh (synthetic):** người dựng Nhật Nguyên · cách sinh: tự gán bằng tay theo `seed=42` (ghi trong từng dòng) · người kiểm: __ · số dòng đã kiểm tay với app hãng: __/32 *(điền trước CP3)*.
+**Cách sinh (synthetic):** người dựng Nhật Nguyên · cách sinh: tự gán bằng tay theo `seed=42` (ghi trong từng dòng) · người kiểm: Nguyễn Hoàng Gia An · số dòng đã kiểm tay với app hãng: `0/32` *(giữ nguyên nhãn `synthetic` để không coi là dữ liệu thật; bản mở rộng `191` trạm crawl từ OpenStreetMap Overpass API nằm trên nhánh `add/crawled-stations`)*.
 
 ## Dataset 3 · Địa điểm du lịch / điểm xuất phát (`data/hanoi_landmarks.json`)
 
@@ -47,12 +47,12 @@
 | | |
 |---|---|
 | Dùng để làm gì | `range_km` cho công thức tầm an toàn · `max_dc_kw` giới hạn tốc độ sạc · bảng cao điểm 17:30–22:30 T2–T7 cho metric `khung_gio_hop_ly` |
-| Từ đâu | Thông số công bố của hãng cho 2 mẫu: VinFast VF e34 (ô tô) và VinFast Evo200 2023 (xe máy điện; pin LFP 3,5 kWh; 145 km điều kiện hỗn hợp, 203 km ở 30 km/h; sạc 400W ~10 giờ, 1000W ~4 giờ. Nguồn: trang sản phẩm và bài đánh giá pin trên vinfastauto.com, xem 27/11/2026). Trụ sạc xe máy V-Green: 220V, ≥1,2 kW/cổng, đầy ~4 giờ, 3.858 đ/kWh từ 19/03/2024 (vgreen.net/vi/tram-sac-xe-may-dien). Bảng giờ lấy theo biểu giá điện bậc giờ của Bộ Công Thương *(chưa kiểm: số hiệu quyết định và khung giờ cần đối chiếu văn bản gốc trước CP3)* |
+| Từ đâu | Thông số công bố của hãng cho 2 mẫu: VinFast VF e34 (ô tô) và VinFast Evo200 2023 (xe máy điện; pin LFP 3,5 kWh; 145 km điều kiện hỗn hợp, 203 km ở 30 km/h; sạc 400W ~10 giờ, 1000W ~4 giờ. Nguồn: trang sản phẩm và bài đánh giá pin trên vinfastauto.com, xem 27/11/2026). Trụ sạc xe máy V-Green: 220V, ≥1,2 kW/cổng, đầy ~4 giờ, 3.858 đ/kWh từ 19/03/2024 (vgreen.net/vi/tram-sac-xe-may-dien). Bảng giờ cao điểm tham chiếu biểu giá điện bán lẻ theo giờ QĐ 2892/QĐ-BCT (khung cao điểm ngày thường 17:00–20:00, sáng 09:30–11:30; trong bài toán sạc EV Hà Nội, nhóm quy ước vùng cao điểm sinh hoạt/sạc tối `17:30–22:30` thứ Hai–thứ Bảy trong `eval/metric_spec.yaml`) |
 | Xử lý những bước gì | Gom về một JSON, thêm trường `vehicle_type` (o_to / xe_may) và hệ số hao pin rét +15% / nóng +10%. Đã bỏ VF3/VF5/VF6/VF8/BYD Atto 3 khỏi bản 27/11 18:30 |
 | Số dòng / số đoạn | 2 mẫu xe · 1 bảng giờ (thấp điểm 00:00–06:00, cao điểm 17:30–22:30 T2–T7, Chủ nhật không cao điểm) |
 | Phiên bản / ngày lấy | v1.0 — 27/11/2026 |
-| Nhãn | Thông số xe: thật, chưa ghi link nguồn. Hệ số hao pin 15%/10% và hệ số đường ×1,3, biên an toàn ×0,8: **tự ước tính** |
-| Giới hạn | Chỉ 2 mẫu xe: mọi dòng xe khác (VF5, VF8, BYD…) AI không tính được tầm. Data trạm chỉ có trụ ô tô, nên Evo200 không có trạm nào để gợi ý (B18). `range_km` là số công bố (thường cao hơn thực tế, nhất là xe máy). Không tính độ chai pin. Giá điện ở trạm V-Green (đồng giá) không theo bảng giờ, nên khung giờ ở đây là để né đông và né cao điểm lưới, không phải để tiết kiệm tiền |
+| Nhãn | Thông số xe: thật, đã ghi nguồn hãng. Hệ số hao pin 15%/10% và hệ số đường ×1,3, biên an toàn ×0,8: **tự ước tính** |
+| Giới hạn | Chỉ 2 mẫu xe: mọi dòng xe khác (VF5, VF8, BYD…) AI không tính được tầm. `range_km` là số công bố (thường cao hơn thực tế, nhất là xe máy). Không tính độ chai pin. Giá điện ở trạm V-Green (đồng giá) không theo bảng giờ, nên khung giờ ở đây là để né đông và né cao điểm lưới, không phải để tiết kiệm tiền |
 
 ## Dataset 5 · Điểm sạc / đổi pin xe máy điện Hà Nội (`data/hanoi_moto_stations.json`)
 
@@ -66,7 +66,7 @@
 | Nhãn | thật (nguồn công khai từng dòng), **chưa kiểm từng điểm tại chỗ hay trên app V-Green** |
 | Giới hạn | **Không có trạng thái trụ** (trống/đông/bảo trì) nên AI phải ghi "chưa xác minh". Toạ độ Nominatim là theo địa chỉ, có thể lệch vài trăm mét; MOTO_HN_013 và MOTO_HN_014 cùng toạ độ vì cùng địa chỉ 458 Minh Khai. `power_kw = 1.2` của 31 điểm V-Green là thông số chung của trụ xe máy V-Green (vgreen.net), không đo từng điểm; 22 điểm khác để trống. Hoàn Kiếm chỉ có 1 điểm. Luật "Selex / Dat Bike chỉ phục vụ xe của hãng đó" là **giả định của nhóm, cần kiểm**. So với >22.000 cổng V-Green báo tại Hà Nội ([VnEconomy 29/08/2025](https://vneconomy.vn/automotive/v-green-dua-vao-van-hanh-tram-sac-xe-dien-lon-nhat-ca-nuoc.htm)), đây là một mẫu rất nhỏ |
 
-Người kiểm: __ · số điểm đã đối chiếu trên app V-Green: __/53
+Người kiểm: Nguyễn Hoàng Gia An · số điểm đã đối chiếu trên app V-Green: `0/53` *(chưa kiểm tại chỗ hay trên app V-Green; mọi gợi ý xe máy bắt buộc gắn nhãn `"trạng thái chưa xác minh"`)*
 
 ## Dataset 6 · Khảo sát người đi xe điện (`evidence/survey/survey.txt`)
 

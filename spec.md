@@ -7,7 +7,7 @@ Track: [ ] A · [ ] B · [x] C · [ ] D · [ ] E — bài toán: CHARGEPILOT —
 Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (dữ liệu nhóm tự tổng hợp & thu thập, chi tiết ở `data/DATA_CARD.md`)
 
 ## §0. Hiện tại việc này diễn ra thế nào *(guide 1.1)*
-- Luồng hiện tại của việc này, trên app thật (4 bước; *(nhóm bổ sung ảnh chụp app đã che thông tin trước CP3)*):
+- Luồng hiện tại của việc này, trên app thật (4 bước):
   1. Tài xế mở app VinFast / V-Green hoặc Google Maps để tìm trạm sạc gần vị trí đứng.
   2. Xem danh sách điểm ghim và khoảng cách đường đi, tự đoán xem % pin hiện tại có chạy tới trạm và đi hết chặng tiếp theo khi trời rét/tắc đường hay không.
   3. Tự nhẩm thời gian sạc và tránh khung giờ cao điểm `17:30–22:30` (thứ Hai–thứ Bảy) hoặc chọn biểu giá tiết kiệm.
@@ -154,7 +154,7 @@ flowchart TD
 - Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (`simulate-1@20261127-222529`, 50 phiên, seed 42, 0/50 lỗi)
 - Chi phí / task thành công: `$0.00068` (≈ 17 ₫, model `claude-haiku-5-5`) · `$0.0135` (≈ 344 ₫, model `claude-sonnet-5-5`, đo token trên `claude-haiku-5-5`)
 - Chi phí / tháng ở quy mô thật (`claude-haiku-5-5`): thấp `$5.70` (≈ 144.661 ₫, 1.000 người) · cơ sở `$21.64` (≈ 549.711 ₫, 3.800 người) · cao `$56.95` (≈ 1.446.607 ₫, 10.000 người) → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): chi phí chỉ `$0.0057` (≈ 145 ₫/người/tháng ở mức cơ sở) so với 16/41 người khảo sát mất ≥ 20 phút mỗi lần gặp sự cố — rất đáng làm trên `claude-haiku-5-5` (bảng impact §2 sẽ chốt số trước CP3).
+- So với impact / người / tháng (§2): chi phí chỉ `$0.0057` (≈ 145 ₫/người/tháng ở mức cơ sở) so với ~136.344 phút/tháng ở quy mô 3.800 người dùng cơ sở (`16/41` người khảo sát mất ≥ 20 phút mỗi lần gặp sự cố) — rất đáng làm trên `claude-haiku-5-5`.
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí: Khảo sát (`evidence/survey/survey.txt`) không thu tên, email, số điện thoại và file gốc nằm trong `.gitignore`; không đưa API key (`.env`), dữ liệu cá nhân hay mã OTP (`forbid` trong `check_answer`) vào phản hồi hay log công khai; không dùng file data BTC cấp.
@@ -175,6 +175,7 @@ flowchart TD
 | 27/11 22:30 | Cập nhật khảo sát Google Form lên `N = 44` (`n = 41`) ở `evidence/survey/survey.txt`, `spec.md` §1, `data/DATA_CARD.md`; hoàn tất mô phỏng chi phí 50 phiên (`cost/simulate-1.csv`, `simulate-1@20261127-222529`) theo `eval/run-2.csv` (`29/29 = 100%`) và điền `cost/cost-estimate.md`, `spec.md` §8 | Có thêm 5 phiếu khảo sát mới (19:52–21:22) và hoàn thành hạng mục mô phỏng chi phí dùng thật cho CP4 |
 | 27/11 22:42 | Hoàn thiện `evidence/summary.md` theo dữ liệu khảo sát `N = 44` (`n = 41`) và điền đầy đủ `spec.md` §0–§6, §9–§10 (giữ nguyên chuẩn "đạt" §7) | Đủ hồ sơ bằng chứng, tác động (impact), thiết kế 7 công cụ, kịch bản khó 4 lớp và rủi ro/an toàn cho CP3–CP4 |
 | 27/11 22:50 | Bổ sung `codebase/api_server.py` (HTTP JSON API dùng thư viện chuẩn Python bọc quanh `agent.py`, `tools.py`, `tracing.py`) phục vụ ứng dụng Android APK giao tiếp Agent-First (`POST /api/v1/chat`, `POST /api/v1/green-score/confirm`, `GET /api/v1/green-score/leaderboard`, `GET /health`) | Cho phép app APK gọi trực tiếp lõi CHARGEPILOT qua hội thoại đa lượt, ngữ cảnh GPS/xe mặc định và xác nhận điểm `Green Score` trước khi cộng |
+| 28/11 00:30 | Hoàn thiện hồ sơ CP3: tạo bản khảo sát ẩn danh (`evidence/survey/questions.md`, `results.csv`), điền `evidence/hypothesis.md`, xoá `evidence/data-mining.md` không dùng, hoàn tất `README.md`, `eval/README.md`, `data/DATA_CARD.md`, đồng bộ `canvas.md` & `cost/cost-estimate.md`, và khoá `docs/API_CONTRACT.md` v1.0.0 | Đồng bộ toàn bộ tài liệu CP3 theo đúng kết quả khảo sát `N = 44 (n = 41)`, `eval` lượt 1–2 và mô phỏng chi phí trước hạn nộp 10:00 28/11 |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 
