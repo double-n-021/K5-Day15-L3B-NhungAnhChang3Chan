@@ -1,48 +1,29 @@
 # Tổng hợp bằng chứng pain
 
-> Điền ở guide bước 1.2, xong trước **CP3 10:00 Thứ Bảy 28/11**. Chấm ở rubric R1.
-> Ba nguồn ngang nhau — tối thiểu **≥1 nguồn đạt ngưỡng**. Mạnh nhất: đào data ra insight → hỏi người dùng để kiểm lại (hoặc ngược lại).
+> Trạng thái tại **CP2 (19:30 Thứ Sáu 27/11/2026)**: Đã chốt giả thuyết (`evidence/hypothesis.md`), đã thiết lập quy trình đếm và lịch hẹn phỏng vấn. Số liệu thực tế và ≥5 trích dẫn nguyên văn sẽ được điền đầy đủ trước **CP3 (10:00 Thứ Bảy 28/11)**.
 
 ## 1. Nguồn đã dùng
 
-| Nguồn | Đạt ngưỡng? | File |
-|---|---|---|
-| Đào data (x/N, %, cách đếm chạy lại được, ≥5 ví dụ) | ☐ | `evidence/data-mining.md` |
-| Phỏng vấn (≥3 người ngoài nhóm, đúng người dùng) | ☐ | `evidence/interviews/P1.md`… |
-| Khảo sát (≥20 người ngoài nhóm, đúng người dùng) | ☐ | `evidence/survey/` |
+| Nguồn | Trạng thái tại CP2 | Đạt ngưỡng? | File |
+|---|---|---|---|
+| Đào data (50 review công khai app sạc EV VN trên Google Play / App Store: x/N, %, ≥5 ví dụ) | Đang thu thập & gắn nhãn | ☐ *(chốt trước 09:00 T7)* | `evidence/data-mining.md` |
+| Phỏng vấn (≥3 tài xế xe điện / Xanh SM tại Hà Nội, hỏi chuyện 1 tháng qua) | Đã lên lịch hẹn tối T6 | ☐ *(chốt trước 09:00 T7)* | `evidence/interviews/P1.md`… |
+| Khảo sát (≥20 người ngoài nhóm) | Chưa chọn làm nguồn chính | ☐ | `evidence/survey/` |
 
-## 2. Số chính
+## 2. Số chính *(sẽ điền số thật ở CP3 — không điền số ước lượng giả tại CP2)*
 
-- Đào data: __/__ (__%) …
-- Phỏng vấn: __/3 người gặp *(n nhỏ không ghi %)* · số lần / tháng: P1 __, P2 __, P3 __ · mỗi lần mất __–__ phút
-- Khảo sát: n = __ · __/__ (__%) …
+- Đào data: chưa chốt số (dự kiến n = 50 review công khai gần nhất, lọc theo quy tắc ghi trước trong `evidence/data-mining.md`).
+- Phỏng vấn: 0/3 đã hoàn tất tại CP2 (3 cuộc hẹn đã đặt tối 27/11 và sáng 28/11).
 
-Phỏng vấn nhiều vai thì đếm theo từng vai, không cộng chung.
+## 3. ≥5 trích dẫn hoặc ví dụ nguyên văn *(cập nhật ở CP3)*
 
-| | Vai | Gặp pain? | Số lần / 1 tháng qua | Lần gần nhất mất | Đang xoay xở bằng |
-|---|---|---|---|---|---|
-| P1 | | | | | |
-| P2 | | | | | |
-| P3 | | | | | |
+*(Chờ kết quả thu thập tối 27/11 — không bịa trích dẫn tại CP2.)*
 
-## 3. ≥5 trích dẫn hoặc ví dụ nguyên văn (có nguồn, bỏ tên)
+## 4. Lịch hẹn phỏng vấn & kế hoạch thu thập (CP2 → CP3)
 
-1. "…" — P_ / dòng data __ / phiếu khảo sát __
-2.
-3.
-4.
-5.
-
-## 4. Các nguồn có khớp nhau không
-
-Data nói __; người dùng nói __. Khớp / lệch ở đâu, vì sao: __
-
-## 5. Kết luận
-
-Giả thuyết ở `evidence/hypothesis.md`: **đúng / sai / phải đổi** — vì __. Điều vẫn chưa biết: __
-
-## Lịch hẹn (dùng cho CP2 — chỉ ghi vai và giờ, không tên)
-
-| Vai | Giờ hẹn | Đã xong? |
-|---|---|---|
-| | | |
+| Vai | Giờ hẹn | Nội dung kiểm chứng | Đã xong? |
+|---|---|---|---|
+| Tài xế Xanh SM / xe điện dịch vụ Hà Nội (P1) | 20:00 Thứ Sáu 27/11 | Lần gần nhất tới trạm gặp kẹt hàng / báo trống giả / thiếu pin trời rét | ☐ |
+| Tài xế xe điện cá nhân VinFast tại Hà Nội (P2) | 20:45 Thứ Sáu 27/11 | Kinh nghiệm tìm trạm dọc lộ trình đi chơi cuối tuần & giờ cao điểm | ☐ |
+| Người từng thuê/lái xe điện đi tham quan Hà Nội (P3) | 08:30 Thứ Bảy 28/11 | Khó khăn ước tính % pin cần sạc và chọn trạm gần điểm du lịch/LEZ | ☐ |
+| Đào review công khai Google Play/App Store (app sạc EV VN) | 21:00 Thứ Sáu 27/11 | Đọc 50 review gần nhất, gắn nhãn & đếm x/50 theo tiêu chí định sẵn | ☐ |

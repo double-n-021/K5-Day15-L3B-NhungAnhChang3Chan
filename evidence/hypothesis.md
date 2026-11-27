@@ -1,11 +1,8 @@
-# Giả thuyết — viết TRƯỚC khi tìm bằng chứng (5 phút, commit ngay)
+# Giả thuyết — viết TRƯỚC khi tổng hợp bằng chứng
 
-> Điền ở guide bước 1.1. Ôn lại: ngày 2 · lab ngày 2.
-> Viết **trước** khi đọc dòng data đầu tiên hay hỏi người đầu tiên, để không sửa cho khớp kết quả. Kết quả ngược giả thuyết vẫn đủ điểm nếu số là thật.
-
-- Ngày giờ viết: __
-- Người dùng chính (một vai cụ thể): __
-- **Mình nghĩ:** [ai] gặp khó khi [việc] vì [lý do], hậu quả là [mất gì].
-- **Có thể còn cách giải thích khác:** __
-- **Mình đúng nếu thấy:** [một con số nhóm tự chọn] — vd "≥2/3 người kể được một lần như thế trong 1 tháng qua" hoặc "≥x/N học viên bỏ ở bước này" *(ví dụ)*
-- **Nguồn sẽ dùng** (≥1 nguồn đạt ngưỡng, guide 1.2): [ ] đào data · [ ] phỏng vấn ≥3 · [ ] khảo sát ≥20 — nguồn chính: __ · nguồn để kiểm lại: __
+- Ngày giờ viết: 27/11/2026 17:30
+- Người dùng chính (một vai cụ thể): Tài xế xe điện đi du lịch tự lái hoặc tài xế xe điện chở khách du lịch/di chuyển theo lịch trình tại TP. Hà Nội.
+- **Mình nghĩ:** Tài xế xe điện đi du lịch hoặc chạy theo lịch trình tại Hà Nội gặp khó khi cần dừng sạc thêm từ mức pin hiện tại lên mức pin mục tiêu vì các app bản đồ hiện có chỉ xếp theo khoảng cách hoặc hiển thị trạng thái tĩnh tại thời điểm xem, không ước tính độ đông tại giờ xe thực sự tới nơi (ETA), không tính hao pin do thời tiết rét/nắng nóng Hà Nội và không cân đối thời gian chờ/sạc theo lịch trình, hậu quả là mất 20–45 phút xếp hàng hoặc quay xe vì trụ hỏng/đông, dễ lỡ giờ tham quan hoặc thiếu pin giữa đường.
+- **Có thể còn cách giải thích khác:** Người dùng chỉ cần xem trạng thái trống tức thời trên app hãng xe (VinFast/V-Green) hoặc app tổng hợp như Việt EV (`vietev.vn`), và thời gian chờ thực tế ở Hà Nội không nghiêm trọng vào các khung ngoài giờ cao điểm.
+- **Mình đúng nếu thấy:** ≥2/3 tài xế xe điện phỏng vấn tại Hà Nội kể được ít nhất 1 lần gặp cảnh app báo trống nhưng tới nơi kẹt/hỏng trụ hoặc hụt pin ngoài dự tính trong 1 tháng qua, VÀ ≥30% trong tập 50 review công khai 1–3★ của app sạc EV tại Việt Nam nhắc trực tiếp tới lỗi trạng thái trụ / chờ đông / tính sai thời gian sạc.
+- **Nguồn sẽ dùng** (≥1 nguồn đạt ngưỡng, guide 1.2): [x] đào data (`evidence/data-mining.md`) · [x] phỏng vấn ≥3 (`evidence/interviews/`) · [ ] khảo sát ≥20 — nguồn chính: đào review công khai Google Play/App Store của app sạc EV tại VN · nguồn để kiểm lại: phỏng vấn ≥3 tài xế xe điện/Xanh SM tại Hà Nội.
