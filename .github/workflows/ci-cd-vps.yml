@@ -38,7 +38,12 @@ jobs:
         run: python run.py check
 
       - name: Check Python syntax in codebase/
-        run: python -m py_compile codebase/agent.py codebase/ai.py codebase/api_server.py codebase/app.py codebase/tools.py codebase/tracing.py
+        run: python -m py_compile codebase/agent.py codebase/ai.py codebase/api_server.py codebase/app.py codebase/test_api_contract.py codebase/tools.py codebase/tracing.py
+
+      - name: Run API Contract v1.0.0 tests
+        env:
+          MODEL_PROVIDER: fake
+        run: python codebase/test_api_contract.py
 
       - name: Scan for leaked .env, API keys, or binary APKs
         run: |
@@ -46,12 +51,12 @@ jobs:
             echo "::error::Phát hiện file .env hoặc .apk bị commit trong Git!"
             exit 1
           fi
-          if git grep -nE 'AIza[0-9A-Za-z_-]{20,}|sk-ant-[0-9A-Za-z_-]{20,}|sk-[0-9A-Za-z]{24,}' -- ':!*.png' ':!*.jpg'; then
+          if git grep -nE 'AIza[0-9A-Za-z_-]{20,}|sk-ant-[0-9A-Za-z_-]{20,}|sk-[0-9A-Za-z]{24,}' -- ':!*.png' ':!*.jpg' ':!*.webp'; then
             echo "::error::Phát hiện chuỗi nghi ngờ là API key trong repo!"
             exit 1
           fi
 
-      - name: Smoke test api_server.py (/health & POST /api/ask in fake mode)
+      - name: Smoke test api_server.py (/health, POST /api/ask, POST /api/v1/chat in fake mode)
         env:
           MODEL_PROVIDER: fake
         run: |
@@ -63,6 +68,10 @@ jobs:
           curl -sf -X POST http://127.0.0.1:8000/api/ask \
             -H "Content-Type: application/json" \
             -d '{"text":"Mình đang ở Hồ Hoàn Kiếm, xe VF e34 còn 35%. Bây giờ 14:00 thứ Bảy, 16:30 đi Văn Miếu. Sạc ở đâu?"}' \
+            | python -m json.tool
+          curl -sf -X POST http://127.0.0.1:8000/api/v1/chat \
+            -H "Content-Type: application/json" \
+            -d '{"message":"Mình đang ở Hồ Hoàn Kiếm, xe VF e34 còn 35%, 14:00 thứ Bảy, sạc ở đâu?","session_id":"ci-smoke"}' \
             | python -m json.tool
 
   deploy-backend:
