@@ -1,0 +1,188 @@
+name: CI/CD — GreenCharge Hanoi (VPS + APK)
+
+on:
+  push:
+    branches: [main, feat/ci-cd-vps]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: "URL tải file .apk (tùy chọn, để trống nếu chỉ deploy backend)"
+        required: false
+        default: ""
+      apk_version:
+        description: "Nhãn phiên bản APK (VD: v1.0.0)"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI · Check K5, Syntax, Secrets & API Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run official K5 check (python run.py check)
+        run: python run.py check
+
+      - name: Check Python syntax in codebase/
+        run: python -m py_compile codebase/agent.py codebase/ai.py codebase/api_server.py codebase/app.py codebase/test_api_contract.py codebase/tools.py codebase/tracing.py
+
+      - name: Run API Contract v1.0.0 tests
+        env:
+          MODEL_PROVIDER: fake
+        run: python codebase/test_api_contract.py
+
+      - name: Scan for leaked .env, API keys, or binary APKs
+        run: |
+          if git ls-files | grep -qE '(^\.env$|\.apk$)'; then
+            echo "::error::Phát hiện file .env hoặc .apk bị commit trong Git!"
+            exit 1
+          fi
+          if git grep -nE 'AIza[0-9A-Za-z_-]{20,}|sk-ant-[0-9A-Za-z_-]{20,}|sk-[0-9A-Za-z]{24,}' -- ':!*.png' ':!*.jpg' ':!*.webp'; then
+            echo "::error::Phát hiện chuỗi nghi ngờ là API key trong repo!"
+            exit 1
+          fi
+
+      - name: Smoke test api_server.py (/health, POST /api/ask, POST /api/v1/chat in fake mode)
+        env:
+          MODEL_PROVIDER: fake
+        run: |
+          python -u codebase/api_server.py &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID || true" EXIT
+          sleep 2
+          curl -sf http://127.0.0.1:8000/health | python -m json.tool
+          curl -sf -X POST http://127.0.0.1:8000/api/ask \
+            -H "Content-Type: application/json" \
+            -d '{"text":"Mình đang ở Hồ Hoàn Kiếm, xe VF e34 còn 35%. Bây giờ 14:00 thứ Bảy, 16:30 đi Văn Miếu. Sạc ở đâu?"}' \
+            | python -m json.tool
+          curl -sf -X POST http://127.0.0.1:8000/api/v1/chat \
+            -H "Content-Type: application/json" \
+            -d '{"message":"Mình đang ở Hồ Hoàn Kiếm, xe VF e34 còn 35%, 14:00 thứ Bảy, sạc ở đâu?","session_id":"ci-smoke"}' \
+            | python -m json.tool
+
+  deploy-backend:
+    name: CD · Deploy API Backend lên VPS
+    needs: ci
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.apk_url == '')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check VPS secrets configured
+        id: check_secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          if [ -z "$VPS_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Bỏ qua deploy VPS vì chưa cấu hình GitHub Secret VPS_HOST (xem deploy/VPS_SETUP.md)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SSH into VPS & update api container
+        if: steps.check_secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: DEPLOY_DIR
+          script: |
+            set -euo pipefail
+            APP_DIR="${DEPLOY_DIR:-/opt/greencharge}"
+            cd "$APP_DIR"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            mkdir -p releases
+            # Chỉ build/restart container api để giữ nguyên link Cloudflare Quick Tunnel đang chạy
+            docker compose -f deploy/docker-compose.yml up -d --build api
+            for i in $(seq 1 15); do
+              if curl -sf http://127.0.0.1:8000/health; then
+                echo ""
+                echo "API healthy!"
+                break
+              fi
+              sleep 2
+            done
+            curl -sf http://127.0.0.1:8000/health >/dev/null
+            echo "Link HTTPS hiện tại:"
+            docker compose -f deploy/docker-compose.yml logs tunnel 2>&1 | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | tail -n 1 || true
+        env:
+          DEPLOY_DIR: ${{ secrets.VPS_APP_DIR }}
+
+  deploy-apk:
+    name: CD · Phát hành APK lên VPS
+    needs: ci
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.apk_url != '')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve APK download URL & version
+        id: apk
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_URL: ${{ github.event.inputs.apk_url }}
+          INPUT_VER: ${{ github.event.inputs.apk_version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_ASSETS: ${{ toJson(github.event.release.assets) }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          ev = os.environ["EVENT_NAME"]
+          if ev == "release":
+              assets = json.loads(os.environ.get("RELEASE_ASSETS") or "[]")
+              apks = [a for a in assets if str(a.get("name", "")).lower().endswith(".apk")]
+              if not apks:
+                  raise SystemExit("Release này chưa đính kèm file .apk nào!")
+              print("url=" + apks[0]["browser_download_url"])
+              print("version=" + (os.environ.get("RELEASE_TAG") or "release"))
+          else:
+              print("url=" + os.environ["INPUT_URL"])
+              print("version=" + (os.environ.get("INPUT_VER") or "manual"))
+          PY
+
+      - name: Check VPS secrets configured
+        id: check_secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          if [ -z "$VPS_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Chưa cấu hình VPS_HOST trong GitHub Secrets — xem deploy/VPS_SETUP.md."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SSH into VPS & publish APK
+        if: steps.check_secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: APK_URL,APK_VERSION,DEPLOY_DIR
+          script: |
+            set -euo pipefail
+            APP_DIR="${DEPLOY_DIR:-/opt/greencharge}"
+            cd "$APP_DIR"
+            bash deploy/scripts/deploy-apk.sh "$APK_URL" "$APK_VERSION"
+            curl -sfI http://127.0.0.1:8000/download/ChargePilot-AI.apk
+        env:
+          APK_URL: ${{ steps.apk.outputs.url }}
+          APK_VERSION: ${{ steps.apk.outputs.version }}
+          DEPLOY_DIR: ${{ secrets.VPS_APP_DIR }}

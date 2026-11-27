@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+__pycache__
+*.pyc
+rl_ppo_ev
+traces
+eval/run-*.csv
+cost/simulate-*.csv
+releases
+evidence/survey/survey.txt
+*.apk
+mobile

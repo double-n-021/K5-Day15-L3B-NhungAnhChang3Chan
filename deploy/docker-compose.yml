@@ -1,0 +1,33 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: greencharge-api
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      - API_HOST=0.0.0.0
+      - PORT=8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../releases:/app/releases:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  # Quick Cloudflare Tunnel miễn phí (KHÔNG cần tên miền, cấp ngay link https://*.trycloudflare.com cho Android 9+)
+  # Lấy link chạy: docker compose -f deploy/docker-compose.yml logs tunnel | grep trycloudflare.com
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: greencharge-tunnel
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --url http://api:8000

@@ -38,3 +38,6 @@ data-btc/
 # File làm việc của nhóm: không commit
 temp.md
 survey.txt
+# Gói cài đặt APK lớn & thư mục phát hành trên VPS: không commit vào Git
+*.apk
+releases/*.apk
