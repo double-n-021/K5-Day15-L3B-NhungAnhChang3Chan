@@ -27,7 +27,7 @@ Chi phí / task thành công = chi phí trung bình mỗi phiên ÷ tỉ lệ đ
 
 ## 3. So với impact
 
-- Impact / người / tháng (`spec.md` §2): *(bảng impact §2 sẽ chốt trước CP3)*; theo khảo sát `n=41`, `16/41` người mất thêm **≥ 20 phút** cho một lần gặp sự cố/chờ sạc gần nhất, với nhóm dùng vừa/nhiều (`4–18` phiên/tháng) tương ứng hàng chục đến vài trăm phút tiết kiệm nếu tránh được trụ hỏng/kẹt.
+- Impact / người / tháng (`spec.md` §2): ~136.344 phút/tháng (~2.272 giờ/tháng) cho 3.800 người dùng cơ sở (`spec.md` §2); theo khảo sát `n=41`, `16/41` người mất thêm **≥ 20 phút** cho một lần gặp sự cố/chờ sạc gần nhất, với nhóm dùng vừa/nhiều (`4–18` phiên/tháng) tương ứng hàng chục đến vài trăm phút tiết kiệm nếu tránh được trụ hỏng/kẹt.
 - Chi phí / người / tháng (cơ sở, model `claude-haiku-5-5`): **`$0.0057` (≈ 145 ₫/người/tháng)**; ngay cả nếu chạy toàn bộ bằng `claude-sonnet-5-5` cũng chỉ `$0.1139` (≈ 2.893 ₫/người/tháng).
 - **Kết luận một dòng — đáng làm không:** **Rất đáng làm** trên `claude-haiku-5-5` (chi phí ~17 ₫/phiên, tổng ~550 nghìn ₫/tháng cho 3.800 người dùng cơ sở nhờ thiết kế workflow cố định chỉ gọi LLM 1 lần/lượt và code tự tính toán/hậu kiểm).
 
