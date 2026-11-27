@@ -40,6 +40,8 @@ if CODEBASE_DIR not in sys.path:
 
 import agent  # noqa: E402
 import ai  # noqa: E402
+import guardrails  # noqa: E402
+import mappo_policy  # noqa: E402
 import tools  # noqa: E402
 import tracing  # noqa: E402
 
@@ -1228,6 +1230,7 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 "model_name": model_val,
                 "apk_available": meta.get("available", False),
                 "apk_meta": meta,
+                "mappo_status": mappo_policy.ENGINE.status(),
             })
             return
         if path == "/api/release":
@@ -1289,9 +1292,88 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
             self._send_json(status, resp)
             _record_request_log("POST", path, status, int(round((time.perf_counter() - t0) * 1000)), client_ip, resp)
             return
+        if path == "/api/v1/mappo/recommend":
+            status, resp = handle_mappo_recommend(payload)
+            self._send_json(status, resp)
+            _record_request_log(
+                "POST",
+                path,
+                status,
+                int(round((time.perf_counter() - t0) * 1000)),
+                client_ip,
+                resp,
+                _payload_to_query(payload),
+            )
+            return
         err_404 = {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"}
         self._send_json(404, err_404)
         _record_request_log("POST", path, 404, int(round((time.perf_counter() - t0) * 1000)), client_ip, err_404)
+
+
+def handle_mappo_recommend(payload: dict) -> tuple[int, dict]:
+    """Endpoint điều phối đội xe CTDE MAPPO + 3 lớp Guardrail (POST /api/v1/mappo/recommend)."""
+    t0 = time.perf_counter()
+    raw_text = _payload_to_query(payload)
+    if raw_text:
+        l1 = guardrails.pre_check_input(raw_text)
+        if l1["out_of_scope_place"] or l1["booking_or_payment"] or l1["otp"] or l1["injection"]:
+            return 200, {
+                "ok": True,
+                "blocked_by_guardrail": True,
+                "guardrail_l1": l1,
+                "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+            }
+
+    lat = payload.get("lat")
+    lon = payload.get("lon")
+    if lat is None or lon is None:
+        origin_name = str(payload.get("origin") or "Hồ Hoàn Kiếm")
+        lms = tools._load("hanoi_landmarks.json") or []
+        hits = tools._find_place(origin_name, lms)
+        if not hits:
+            return 400, {"ok": False, "error": f"Không định vị được vị trí '{origin_name}' tại Hà Nội."}
+        lat, lon = float(hits[0]["lat"]), float(hits[0]["lon"])
+
+    dest_lat, dest_lon = payload.get("dest_lat"), payload.get("dest_lon")
+    if (dest_lat is None or dest_lon is None) and payload.get("destination"):
+        lms = tools._load("hanoi_landmarks.json") or []
+        dhits = tools._find_place(str(payload["destination"]), lms)
+        if dhits:
+            dest_lat, dest_lon = float(dhits[0]["lat"]), float(dhits[0]["lon"])
+
+    soc_pct = payload.get("current_soc", payload.get("soc_pct", 35.0))
+    vehicle_type = str(payload.get("vehicle_type") or "o_to")
+    if vehicle_type not in ("o_to", "xe_may"):
+        return 400, {"ok": False, "error": "vehicle_type phải là 'o_to' hoặc 'xe_may'."}
+
+    hour = float(payload.get("hour", 14.0))
+    weekday = int(payload.get("weekday", 0))
+    weather = tools.get_weather(hour, weekday, payload.get("user_temp_c"))
+
+    rec = mappo_policy.ENGINE.recommend(
+        origin_lat=float(lat),
+        origin_lon=float(lon),
+        soc_pct=float(soc_pct),
+        vehicle_type=vehicle_type,
+        ev_model=payload.get("ev_model"),
+        dest_lat=float(dest_lat) if dest_lat is not None else None,
+        dest_lon=float(dest_lon) if dest_lon is not None else None,
+        next_trip_km=float(payload.get("next_trip_km", 0.0)),
+        hour=hour,
+        weekday=weekday,
+        urgent=bool(payload.get("urgent", False)),
+        temp_c=float(weather.get("temp_used_c") or 24.0),
+        rain_pct=float(weather.get("rain_pct") or 0.0),
+        drain_factor=float(weather.get("drain_factor") or 1.0),
+        record_reservation=bool(payload.get("record_reservation", False)),
+    )
+    return 200, {
+        "ok": True,
+        "blocked_by_guardrail": False,
+        "recommendation": rec,
+        "weather": weather,
+        "latency_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+    }
 
 
 def create_server(host: str = "0.0.0.0", port: int = 8000) -> ThreadingHTTPServer:

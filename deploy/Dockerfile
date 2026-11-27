@@ -8,9 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Chỉ chép mã nguồn cần cho API & dữ liệu (không chép rl_ppo_ev/ hay .env)
+# Chỉ chép mã nguồn cần cho API, dữ liệu & trọng số MAPPO (không chép rl_ppo_ev/ hay .env)
 COPY codebase/ ./codebase/
 COPY data/ ./data/
+COPY models/ ./models/
 
 # Thư mục mount file APK phát hành trên VPS
 RUN mkdir -p /app/releases && \
