@@ -86,6 +86,7 @@ export function HanoiMapView({
   const mapRef = useRef<MapRef | null>(null);
   const lastMarkerTapRef = useRef<{ id: string; at: number }>({ id: '', at: 0 });
   const lastFocusedKeyRef = useRef<string | null>(null);
+  const lastFollowCameraAtRef = useRef<number>(0);
 
   const handleStationTap = (stationId: string) => {
     const now = Date.now();
@@ -97,14 +98,20 @@ export function HanoiMapView({
   };
 
   useEffect(() => {
-    if (followVehicle && vehicleCoordinate) {
+    if (!followVehicle || !vehicleCoordinate) return;
+    const now = Date.now();
+    if (now - lastFollowCameraAtRef.current < 450) return;
+    lastFollowCameraAtRef.current = now;
+    try {
       cameraRef.current?.easeTo({
         center: vehicleCoordinate,
         zoom: 15.2,
         pitch: is3D ? 52 : 0,
         bearing: vehicleBearing,
-        duration: 380,
+        duration: 420,
       });
+    } catch {
+      // Ignore camera easing error when native map view is unmounting
     }
   }, [followVehicle, vehicleCoordinate, vehicleBearing, is3D, cameraRef]);
 
@@ -124,18 +131,20 @@ export function HanoiMapView({
   }, [focusCoordinate, focusZoom, followVehicle, cameraRef, is3D]);
 
   const routeFeatures = useMemo(() => {
-    return routes.map((item) => ({
-      id: item.id,
-      variant: item.variant,
-      geojson: {
-        type: 'Feature' as const,
-        properties: { id: item.id, variant: item.variant },
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: item.route.coordinates,
+    return routes
+      .filter((item) => Array.isArray(item.route?.coordinates) && item.route.coordinates.length >= 2)
+      .map((item) => ({
+        id: item.id,
+        variant: item.variant,
+        geojson: {
+          type: 'Feature' as const,
+          properties: { id: item.id, variant: item.variant },
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: item.route.coordinates,
+          },
         },
-      },
-    }));
+      }));
   }, [routes]);
 
   return (

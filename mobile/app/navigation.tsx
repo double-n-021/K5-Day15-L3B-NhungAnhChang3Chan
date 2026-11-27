@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +14,7 @@ import {
   ArrowUp,
   CornerUpLeft,
   CornerUpRight,
+  ExternalLink,
   Flag,
   Pause,
   Play,
@@ -23,10 +25,16 @@ import { HanoiMapView, type MapRouteLayerItem } from '@/components/map/HanoiMapV
 import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { VEHICLES } from '@/data/vehicles';
 import { minutesToTime, timeToMinutes } from '@/services/decisionEngine';
-import { getCachedRoute, interpolateAlongRoute } from '@/services/routeService';
+import {
+  buildDirectRoute,
+  fetchLiveOsrmRoute,
+  getCachedRoute,
+  interpolateAlongRoute,
+} from '@/services/routeService';
 import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
+import type { RouteGeometry } from '@/types';
 
 export default function ActiveNavigationScreen() {
   const insets = useSafeAreaInsets();
@@ -43,16 +51,84 @@ export default function ActiveNavigationScreen() {
 
   const targetStation =
     effectiveStations.find((s) => s.id === selectedStationId) ??
+    effectiveStations.find((s) => s.id === recommendation.recommended?.station.id) ??
     recommendation.recommended?.station ??
     effectiveStations[0];
 
-  const activeRoute = useMemo(() => {
+  const cachedRoute = useMemo(() => {
+    if (!targetStation) return null;
     return (
       getCachedRoute(effectiveInput.origin.id, targetStation.id) ??
       recommendation.recommended?.routeToStation ??
       null
     );
-  }, [effectiveInput.origin.id, targetStation.id, recommendation.recommended]);
+  }, [effectiveInput.origin.id, targetStation?.id, recommendation.recommended]);
+
+  const [liveRoute, setLiveRoute] = useState<RouteGeometry | null>(null);
+  const [isFetchingRoute, setIsFetchingRoute] = useState(false);
+
+  const fallbackDirectRoute = useMemo(() => {
+    if (!targetStation) return null;
+    return buildDirectRoute(
+      effectiveInput.origin.id,
+      targetStation.id,
+      effectiveInput.origin.coordinates,
+      targetStation.coordinates,
+      targetStation.shortName
+    );
+  }, [
+    effectiveInput.origin.id,
+    effectiveInput.origin.coordinates,
+    targetStation?.id,
+    targetStation?.coordinates,
+    targetStation?.shortName,
+  ]);
+
+  const activeRoute =
+    cachedRoute ??
+    (liveRoute &&
+    targetStation &&
+    liveRoute.fromId === effectiveInput.origin.id &&
+    liveRoute.toId === targetStation.id
+      ? liveRoute
+      : null) ??
+    fallbackDirectRoute;
+
+  useEffect(() => {
+    if (!targetStation || cachedRoute) {
+      setIsFetchingRoute(false);
+      return;
+    }
+    let cancelled = false;
+    setIsFetchingRoute(true);
+    fetchLiveOsrmRoute({
+      fromId: effectiveInput.origin.id,
+      toId: targetStation.id,
+      originCoord: effectiveInput.origin.coordinates,
+      destCoord: targetStation.coordinates,
+      destinationName: targetStation.shortName,
+    })
+      .then((route) => {
+        if (!cancelled) {
+          setLiveRoute(route);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsFetchingRoute(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    cachedRoute,
+    effectiveInput.origin.id,
+    effectiveInput.origin.coordinates,
+    targetStation?.id,
+    targetStation?.coordinates,
+    targetStation?.shortName,
+  ]);
 
   const [isRunning, setIsRunning] = useState(true);
   const [speedMultiplier, setSpeedMultiplier] = useState<1 | 2 | 5>(2);
@@ -67,7 +143,7 @@ export default function ActiveNavigationScreen() {
     if (!isRunning || !activeRoute) return;
     const interval = setInterval(() => {
       setProgress((prev) => {
-        const delta = 0.004 * speedMultiplier;
+        const delta = 0.01 * speedMultiplier;
         const next = prev + delta;
         if (next >= 1) {
           setIsRunning(false);
@@ -76,7 +152,7 @@ export default function ActiveNavigationScreen() {
         }
         return next;
       });
-    }, 60);
+    }, 150);
     return () => clearInterval(interval);
   }, [isRunning, speedMultiplier, activeRoute]);
 
@@ -152,6 +228,22 @@ export default function ActiveNavigationScreen() {
             ? RotateCcw
             : ArrowUp;
 
+  if (!targetStation) {
+    return (
+      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center', padding: SPACING.xl }]}>
+        <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary, textAlign: 'center', marginBottom: 12 }]}>
+          Chưa có trạm sạc mục tiêu để dẫn đường
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.gmapsBtn, { paddingHorizontal: 16, paddingVertical: 10 }]}
+        >
+          <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>Quay lại</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
       {/* Full-Screen Hanoi Map */}
@@ -173,8 +265,13 @@ export default function ActiveNavigationScreen() {
       {/* Top Maneuver + Simulation Label */}
       <View style={[styles.topOverlay, { top: insets.top + 8 }]}>
         <View style={styles.simBanner}>
-          <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
-            CHẾ ĐỘ DẪN ĐƯỜNG MÔ PHỎNG (OSRM) · KHÔNG DÙNG LÁI XE THỰC TẾ
+          <Text
+            style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, flex: 1, flexShrink: 1 }]}
+            numberOfLines={1}
+          >
+            {isFetchingRoute
+              ? 'ĐANG TẢI TUYẾN OSRM THỰC TẾ...'
+              : 'DẪN ĐƯỜNG MÔ PHỎNG (OSRM) · KHÔNG DÙNG LÁI XE'}
           </Text>
           <Pressable
             onPress={() => router.back()}
@@ -217,12 +314,28 @@ export default function ActiveNavigationScreen() {
               {targetStation.shortName}
             </Text>
           </View>
-          <Pressable onPress={handleTriggerFault} style={styles.faultBtn}>
-            <AlertTriangle size={14} color={COLORS.criticalRed} />
-            <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
-              Sự cố trạm!
-            </Text>
-          </Pressable>
+          <View style={styles.hudActionsRow}>
+            <Pressable
+              onPress={() => {
+                const [lon, lat] = targetStation.coordinates;
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+                Linking.openURL(url).catch(() => {});
+              }}
+              style={styles.gmapsBtn}
+              accessibilityLabel="Mở Google Maps"
+            >
+              <ExternalLink size={14} color={COLORS.energyGreen} />
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]}>
+                Google Maps
+              </Text>
+            </Pressable>
+            <Pressable onPress={handleTriggerFault} style={styles.faultBtn}>
+              <AlertTriangle size={14} color={COLORS.criticalRed} />
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
+                Sự cố trạm!
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.hudMetrics}>
@@ -393,6 +506,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  hudActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gmapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.energyGreenDim,
+    borderColor: COLORS.energyGreenBorder,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: RADIUS.pill,
   },
   faultBtn: {
     flexDirection: 'row',

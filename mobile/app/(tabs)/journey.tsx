@@ -154,37 +154,53 @@ export default function JourneyScreen() {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const lastVoiceTriggerRef = useRef(0);
+  const fullHeightRef = useRef(0);
+  const currentHeightRef = useRef(0);
+  const lastKbHeightRef = useRef(0);
+  const isKeyboardOpenRef = useRef(false);
 
-  // Explicit Android IME listener so inputDock sits flush above the keyboard even with edgeToEdge
+  // Hybrid Android IME listener: skips paddingBottom if OS adjustResize already shrank view,
+  // and applies exact keyboard height if edgeToEdge prevents resizing.
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
+      isKeyboardOpenRef.current = true;
       setIsKeyboardOpen(true);
-      if (rootRef.current && e.endCoordinates.screenY > 0) {
-        rootRef.current.measureInWindow((_x: number, y: number, _w: number, h: number) => {
-          const rootBottom = y + h;
-          const overlap = Math.max(0, Math.round(rootBottom - e.endCoordinates.screenY));
-          if (h > 0) {
-            setKeyboardOffset(overlap > 0 ? overlap + 4 : 0);
-          } else {
-            setKeyboardOffset(e.endCoordinates.height);
-          }
-        });
-      } else {
-        setKeyboardOffset(e.endCoordinates.height);
-      }
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-      }, 60);
+      const kbHeight = Math.max(0, Math.round(e.endCoordinates?.height ?? 0));
+      lastKbHeightRef.current = kbHeight;
+
+      const applyInset = () => {
+        const shrink =
+          fullHeightRef.current > 0 && currentHeightRef.current > 0
+            ? fullHeightRef.current - currentHeightRef.current
+            : 0;
+        if (shrink >= 80) {
+          setKeyboardOffset(0);
+        } else {
+          setKeyboardOffset(kbHeight);
+        }
+      };
+
+      applyInset();
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        applyInset();
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 90);
     });
     const hideSub = Keyboard.addListener(hideEvent, () => {
+      if (syncTimer) clearTimeout(syncTimer);
+      isKeyboardOpenRef.current = false;
+      lastKbHeightRef.current = 0;
       setIsKeyboardOpen(false);
       setKeyboardOffset(0);
     });
 
     return () => {
+      if (syncTimer) clearTimeout(syncTimer);
       showSub.remove();
       hideSub.remove();
     };
@@ -395,6 +411,22 @@ export default function JourneyScreen() {
     <View
       ref={rootRef}
       collapsable={false}
+      onLayout={(e) => {
+        const h = Math.round(e.nativeEvent.layout.height);
+        currentHeightRef.current = h;
+        if (!isKeyboardOpenRef.current) {
+          fullHeightRef.current = h;
+          return;
+        }
+        if (fullHeightRef.current > 0) {
+          const shrink = fullHeightRef.current - h;
+          if (shrink >= 80) {
+            setKeyboardOffset(0);
+          } else if (lastKbHeightRef.current > 0) {
+            setKeyboardOffset(lastKbHeightRef.current);
+          }
+        }
+      }}
       style={[
         styles.screen,
         {
@@ -476,14 +508,15 @@ export default function JourneyScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Original P-006 Mascot Dialogue Hero */}
-            <MascotAssistant
-              mood={mascotMood}
-              speech={mascotSpeech}
-              badgeText={mascotBadge}
-              size={64}
-              compact={isKeyboardOpen}
-            />
+            {/* Original P-006 Mascot Dialogue Hero — hidden while typing so chat & input stay visible */}
+            {!isKeyboardOpen && (
+              <MascotAssistant
+                mood={mascotMood}
+                speech={mascotSpeech}
+                badgeText={mascotBadge}
+                size={64}
+              />
+            )}
 
             {/* Subtle offline fallback note when network is unavailable */}
             {apiError && apiSourceMode === 'offline_fallback' && (
@@ -770,7 +803,9 @@ export default function JourneyScreen() {
                   </Pressable>
                 </View>
 
-                {itineraryStatus === 'accepted' && !activeOption.isIntercitySimulated && activeOption.hanoiStationId && (
+                {itineraryStatus === 'accepted' &&
+                  !activeOption.isIntercitySimulated &&
+                  (activeOption.hanoiStationId || activeOption.apiStationId) && (
                   <Pressable
                     onPress={() => router.push('/navigation')}
                     style={styles.startNavBtn}
@@ -823,6 +858,9 @@ export default function JourneyScreen() {
               placeholder="Nói hoặc gõ yêu cầu..."
               placeholderTextColor={COLORS.textMuted}
               style={styles.dockInput}
+              multiline
+              maxLength={400}
+              textAlignVertical="center"
               returnKeyType="send"
               onSubmitEditing={() => submitNaturalText(promptText)}
             />
@@ -1163,13 +1201,15 @@ const styles = StyleSheet.create({
   },
   inputDock: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 2,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.surface,
+    zIndex: 30,
+    elevation: 12,
   },
   micDockBtn: {
     width: 46,
@@ -1185,11 +1225,13 @@ const styles = StyleSheet.create({
   dockInput: {
     flex: 1,
     minHeight: 44,
+    maxHeight: 96,
     backgroundColor: COLORS.bg,
-    borderRadius: RADIUS.pill,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
     color: COLORS.textPrimary,
     fontFamily: 'BeVietnamPro_400Regular',
     fontSize: 14,

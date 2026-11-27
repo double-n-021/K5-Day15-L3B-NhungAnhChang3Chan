@@ -597,7 +597,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     if (active?.isLiveApi) {
       set({
         itineraryStatus: 'accepted',
-        selectedStationId: active.hanoiStationId ?? selectedStationId,
+        selectedStationId: active.hanoiStationId ?? active.apiStationId ?? selectedStationId,
       });
       if (active.confirmToken && pts > 0) {
         void get().confirmGreenToken(active.confirmToken, active.stationName);

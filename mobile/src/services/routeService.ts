@@ -1,5 +1,5 @@
 import routesArchive from '../../assets/routes/hanoi-routes.json';
-import type { RouteGeometry } from '@/types';
+import type { ManeuverStep, RouteGeometry } from '@/types';
 
 interface RouteArchiveShape {
   generatedAt: string;
@@ -142,4 +142,162 @@ export function interpolateAlongRoute(
     remainingMeters,
     currentStepIndex,
   };
+}
+
+const LIVE_ROUTE_CACHE = new Map<string, RouteGeometry>();
+
+function translateOsrmManeuver(step: any, index: number): ManeuverStep {
+  const type = String(step?.maneuver?.type ?? 'continue');
+  const modifier = step?.maneuver?.modifier ? String(step.maneuver.modifier) : '';
+  const streetName = typeof step?.name === 'string' && step.name.trim() ? step.name.trim() : 'đường phía trước';
+  const loc = Array.isArray(step?.maneuver?.location) && step.maneuver.location.length >= 2
+    ? ([Number(step.maneuver.location[0]), Number(step.maneuver.location[1])] as [number, number])
+    : ([105.82, 21.02] as [number, number]);
+
+  const dirMap: Record<string, string> = {
+    left: 'Rẽ trái',
+    right: 'Rẽ phải',
+    'slight left': 'Chếch sang trái',
+    'slight right': 'Chếch sang phải',
+    'sharp left': 'Rẽ ngoặt trái',
+    'sharp right': 'Rẽ ngoặt phải',
+    uturn: 'Quay đầu',
+    straight: 'Đi thẳng',
+  };
+
+  let instruction = `Tiếp tục theo ${streetName}`;
+  if (type === 'depart' || index === 0) {
+    instruction = `Xuất phát theo ${streetName}`;
+  } else if (type === 'arrive') {
+    instruction = 'Đã đến trạm sạc mục tiêu';
+  } else if (type === 'roundabout' || type === 'rotary') {
+    instruction = `Vào vòng xuyến, đi tiếp ra ${streetName}`;
+  } else if (modifier && dirMap[modifier]) {
+    instruction = `${dirMap[modifier]} vào ${streetName}`;
+  } else if (type === 'fork' || type === 'merge') {
+    instruction = `Nhập làn theo hướng ${streetName}`;
+  }
+
+  return {
+    instruction,
+    streetName,
+    distanceMeters: Math.max(0, Math.round(Number(step?.distance ?? 0))),
+    durationSeconds: Math.max(0, Math.round(Number(step?.duration ?? 0))),
+    location: loc,
+    maneuverType: type,
+    modifier,
+  };
+}
+
+/** Builds a smooth multi-point fallback route immediately without waiting on network. */
+export function buildDirectRoute(
+  fromId: string,
+  toId: string,
+  originCoord: [number, number],
+  destCoord: [number, number],
+  destinationName?: string,
+): RouteGeometry {
+  const segments = 24;
+  const coordinates: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    coordinates.push([
+      originCoord[0] + (destCoord[0] - originCoord[0]) * t,
+      originCoord[1] + (destCoord[1] - originCoord[1]) * t,
+    ]);
+  }
+  const distanceMeters = Math.max(50, Math.round(haversineDistanceMeters(originCoord, destCoord)));
+  const durationSeconds = Math.max(60, Math.round(distanceMeters / 7.8));
+  const label = destinationName?.trim() || 'trạm sạc mục tiêu';
+
+  return {
+    id: `direct__${fromId}__${toId}`,
+    fromId,
+    toId,
+    distanceMeters,
+    durationSeconds,
+    coordinates,
+    steps: [
+      {
+        instruction: `Đi thẳng hướng về ${label}`,
+        streetName: label,
+        distanceMeters,
+        durationSeconds,
+        location: originCoord,
+        maneuverType: 'depart',
+        modifier: 'straight',
+      },
+      {
+        instruction: `Đến ${label}`,
+        streetName: label,
+        distanceMeters: 0,
+        durationSeconds: 0,
+        location: destCoord,
+        maneuverType: 'arrive',
+        modifier: '',
+      },
+    ],
+  };
+}
+
+/** Fetches a live turn-by-turn OSRM route, falling back gracefully to buildDirectRoute on timeout/error. */
+export async function fetchLiveOsrmRoute(params: {
+  fromId: string;
+  toId: string;
+  originCoord: [number, number];
+  destCoord: [number, number];
+  destinationName?: string;
+}): Promise<RouteGeometry> {
+  const { fromId, toId, originCoord, destCoord, destinationName } = params;
+  const cached = getCachedRoute(fromId, toId);
+  if (cached) return cached;
+
+  const cacheKey = `${fromId}__${toId}__${originCoord[0].toFixed(4)},${originCoord[1].toFixed(4)}__${destCoord[0].toFixed(4)},${destCoord[1].toFixed(4)}`;
+  const liveCached = LIVE_ROUTE_CACHE.get(cacheKey);
+  if (liveCached) return liveCached;
+
+  const fallback = buildDirectRoute(fromId, toId, originCoord, destCoord, destinationName);
+  if (haversineDistanceMeters(originCoord, destCoord) < 25) {
+    LIVE_ROUTE_CACHE.set(cacheKey, fallback);
+    return fallback;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${originCoord[0]},${originCoord[1]};${destCoord[0]},${destCoord[1]}?overview=full&geometries=geojson&steps=true`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return fallback;
+
+    const data = await res.json();
+    const firstRoute = data?.routes?.[0];
+    const coords = firstRoute?.geometry?.coordinates;
+    if (data?.code !== 'Ok' || !Array.isArray(coords) || coords.length < 2) {
+      return fallback;
+    }
+
+    const rawSteps: any[] = Array.isArray(firstRoute?.legs)
+      ? firstRoute.legs.flatMap((leg: any) => (Array.isArray(leg?.steps) ? leg.steps : []))
+      : [];
+    const steps: ManeuverStep[] =
+      rawSteps.length > 0
+        ? rawSteps.map((st, idx) => translateOsrmManeuver(st, idx))
+        : fallback.steps;
+
+    const route: RouteGeometry = {
+      id: `osrm__${fromId}__${toId}`,
+      fromId,
+      toId,
+      distanceMeters: Math.max(50, Math.round(Number(firstRoute.distance ?? fallback.distanceMeters))),
+      durationSeconds: Math.max(60, Math.round(Number(firstRoute.duration ?? fallback.durationSeconds))),
+      coordinates: coords.map((pt: any) => [Number(pt[0]), Number(pt[1])] as [number, number]),
+      steps,
+    };
+    LIVE_ROUTE_CACHE.set(cacheKey, route);
+    return route;
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
