@@ -22,7 +22,7 @@ jobs:
   build-android-apk:
     name: Build & Publish ChargePilot-AI-release.apk
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       EXPO_PUBLIC_API_BASE_URL: ${{ github.event.inputs.api_base_url || 'https://maintaining-podcast-down-coding.trycloudflare.com' }}
 
@@ -60,7 +60,7 @@ jobs:
         working-directory: mobile/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: Verify & stage ChargePilot-AI-release.apk
         id: apk
