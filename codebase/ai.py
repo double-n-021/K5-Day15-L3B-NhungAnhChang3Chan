@@ -17,8 +17,10 @@ Chế độ giả (mặc định khi .env chưa có MODEL_PROVIDER, hoặc MODEL
 Nối model thật: điền .env (chép từ .env.example), rồi viết nhánh gọi API ở dưới theo docs/connect-model.md
 (có ví dụ OpenAI, Claude, model chạy trên máy, và cách nối nhà cung cấp khác). Không dán API key vào file này.
 """
+import http.client
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -47,16 +49,25 @@ API_KEY = (os.environ.get("API_KEY") or "").strip()
 URL_CLAUDE = "https://api.anthropic.com/v1/messages"
 
 
-def post_json(url, headers, body, timeout=90):
-    """Gửi POST JSON, trả về JSON phản hồi. Chỉ dùng thư viện chuẩn (urllib)."""
-    req = urllib.request.Request(
-        url, data=json.dumps(body).encode("utf-8"), method="POST",
-        headers=dict({"Content-Type": "application/json"}, **headers))
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+def post_json(url, headers, body, timeout=90, retries=2):
+    """Gửi POST JSON, trả về JSON phản hồi (có retry khi lỗi mạng tạm thời). Chỉ dùng thư viện chuẩn (urllib)."""
+    payload = json.dumps(body).encode("utf-8")
+    req_headers = dict({"Content-Type": "application/json"}, **headers)
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url, data=payload, method="POST", headers=req_headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503, 504) and attempt < retries:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, http.client.HTTPException, OSError):
+            if attempt < retries:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise
 
 
 def call_claude(system, user):

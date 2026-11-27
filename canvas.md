@@ -6,7 +6,7 @@
 
 | # | Dòng | Nhóm điền |
 |---|---|---|
-| 1 | Track + lát cắt dự kiến | Track C (Du lịch & Di chuyển) · Trợ lý gợi ý Top 3 trạm sạc công cộng và khung giờ sạc cho tài xế xe điện đi du lịch/di chuyển tại Hà Nội (GreenCharge Hanoi). |
+| 1 | Track + lát cắt dự kiến | Track C (Du lịch & Di chuyển) · Trợ lý gợi ý Top 3 trạm sạc công cộng và khung giờ sạc cho tài xế xe điện đi du lịch/di chuyển tại Hà Nội (CHARGEPILOT). |
 | 2 | Người dùng chính (một vai cụ thể — không phải "học viên nói chung") | Tài xế xe điện đi du lịch tự lái hoặc tài xế xe điện chở khách du lịch/di chuyển theo lịch trình tại TP. Hà Nội. |
 | 3 | Pain một câu: ai — đang làm gì — vướng đâu — hậu quả | Tài xế xe điện đi du lịch hoặc chạy theo lịch trình tại Hà Nội khi tìm trạm sạc công cộng chỉ thấy khoảng cách trên bản đồ mà không biết trước trụ đang kẹt/bảo trì, thời tiết rét làm hao pin nhanh hay khung giờ cao điểm lưới điện, dẫn đến mất thời gian xếp hàng hoặc phải đổi trạm, dễ lỡ lịch trình và có nguy cơ cạn pin giữa đường. |
 | 4 | Bằng chứng đầu — CP1: giả thuyết + nguồn sẽ kiểm · CP2: số đầu tiên + 1 trích dẫn | Giả thuyết: Tài xế xe điện tại Hà Nội thường gặp tình trạng app báo sai trạng thái trụ/kẹt hàng vào giờ cao điểm khiến mất 20–45 phút chờ hoặc phải đi tìm trạm khác. Nguồn sẽ kiểm (CP2–CP3): (1) Đào review công khai 1–3 sao trên Google Play/App Store của các ứng dụng trạm sạc EV tại Việt Nam; (2) Phỏng vấn ≥3 tài xế xe điện/Xanh SM tại Hà Nội về lần sạc vướng gần nhất trong 1 tháng qua. |
