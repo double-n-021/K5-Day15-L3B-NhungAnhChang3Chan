@@ -1,0 +1,18 @@
+[
+  {"name": "Hồ Hoàn Kiếm", "aliases": ["hoàn kiếm", "hoan kiem", "hồ gươm", "ho guom", "bờ hồ"], "lat": 21.0287, "lon": 105.8524, "lez_zone": true, "district": "Hoàn Kiếm"},
+  {"name": "Phố Cổ Hà Nội", "aliases": ["phố cổ", "pho co", "hàng đào", "tạ hiện", "đồng xuân"], "lat": 21.0352, "lon": 105.8509, "lez_zone": true, "district": "Hoàn Kiếm"},
+  {"name": "Lăng Chủ tịch Hồ Chí Minh", "aliases": ["lăng bác", "lang bac", "ba đình", "ba dinh", "quảng trường ba đình"], "lat": 21.0369, "lon": 105.8347, "lez_zone": false, "district": "Ba Đình"},
+  {"name": "Văn Miếu - Quốc Tử Giám", "aliases": ["văn miếu", "van mieu", "quốc tử giám"], "lat": 21.0276, "lon": 105.8355, "lez_zone": false, "district": "Đống Đa"},
+  {"name": "Hồ Tây", "aliases": ["hồ tây", "ho tay", "tây hồ", "tay ho", "phủ tây hồ", "trích sài"], "lat": 21.0574, "lon": 105.8226, "lez_zone": false, "district": "Tây Hồ"},
+  {"name": "Làng gốm Bát Tràng", "aliases": ["bát tràng", "bat trang", "làng gốm"], "lat": 20.9765, "lon": 105.9135, "lez_zone": false, "district": "Gia Lâm"},
+  {"name": "Sân bay Nội Bài", "aliases": ["nội bài", "noi bai", "sân bay"], "lat": 21.2187, "lon": 105.8042, "lez_zone": false, "district": "Sóc Sơn"},
+  {"name": "Cầu Giấy", "aliases": ["cầu giấy", "cau giay", "dịch vọng", "duy tân", "trần thái tông"], "lat": 21.0313, "lon": 105.7927, "lez_zone": false, "district": "Cầu Giấy"},
+  {"name": "Mỹ Đình", "aliases": ["mỹ đình", "my dinh", "sân vận động mỹ đình", "nam từ liêm"], "lat": 21.0204, "lon": 105.7639, "lez_zone": false, "district": "Nam Từ Liêm"},
+  {"name": "Đống Đa", "aliases": ["đống đa", "dong da", "thái hà", "chùa bộc", "xã đàn"], "lat": 21.0128, "lon": 105.8245, "lez_zone": false, "district": "Đống Đa"},
+  {"name": "Thanh Xuân", "aliases": ["thanh xuân", "thanh xuan", "royal city", "nguyễn trãi", "lê văn lương"], "lat": 20.9998, "lon": 105.8072, "lez_zone": false, "district": "Thanh Xuân"},
+  {"name": "Hai Bà Trưng", "aliases": ["hai bà trưng", "hai ba trung", "times city", "bách khoa", "phố huế"], "lat": 21.0038, "lon": 105.8608, "lez_zone": false, "district": "Hai Bà Trưng"},
+  {"name": "Long Biên", "aliases": ["long biên", "long bien", "aeon long biên", "aeon mall long bien"], "lat": 21.0273, "lon": 105.8994, "lez_zone": false, "district": "Long Biên"},
+  {"name": "Hoàng Mai", "aliases": ["hoàng mai", "hoang mai", "linh đàm", "giáp bát"], "lat": 20.9686, "lon": 105.8396, "lez_zone": false, "district": "Hoàng Mai"},
+  {"name": "Hà Đông", "aliases": ["hà đông", "ha dong", "aeon hà đông", "văn quán"], "lat": 20.9719, "lon": 105.7778, "lez_zone": false, "district": "Hà Đông"},
+  {"name": "Vinhomes Ocean Park", "aliases": ["ocean park", "vinhomes ocean park", "gia lâm"], "lat": 20.9922, "lon": 105.9437, "lez_zone": false, "district": "Gia Lâm"}
+]

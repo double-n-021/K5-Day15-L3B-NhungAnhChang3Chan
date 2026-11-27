@@ -11,11 +11,13 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 - Công cụ / AI đang được dùng cho việc này (nếu có) + nguồn. Không kiểm được thì ghi "chưa kiểm":
 
 ## §1. Người dùng & bằng chứng *(guide 1.1, 1.2)*
-- Người dùng chính (một vai cụ thể):
+- Người dùng chính (một vai cụ thể): tài xế ô tô điện đi du lịch tự lái hoặc chở khách theo lịch trình tại Hà Nội (giữ theo canvas dòng 2). Người đi xe máy điện (Evo200) là người dùng phụ, chỉ được phục vụ ở mức gợi ý điểm sạc có trong dữ liệu.
 - Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI):
 - Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ:
 - Pain (KHÔNG chữ AI): ai — đang làm gì — vướng đâu — hậu quả gì:
-- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): __
+- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): khảo sát Google Form 27/11/2026 ([kết quả](https://docs.google.com/spreadsheets/d/1snnt7ZLwUSfAMaQSgS3vNXEuUuPBQWm-cn7rXv51xls/edit?gid=914628555#gid=914628555)), 28 câu trả lời, bỏ 3 người chưa từng đi xe điện → n = 25. Trong 1 tháng qua: 12/25 gặp trạm quá đông giờ cao điểm 17:30–22:30, 10/25 không ước lượng được thời gian sạc, 9/25 app báo trống nhưng tới nơi kín chỗ, 9/25 bị rét / nóng / tắc đường làm tụt pin, 6/25 gặp trụ hỏng / bảo trì; 10/25 mất thêm ≥ 20 phút ở lần gần nhất.
+  - **Lệch đối tượng:** khảo sát chủ yếu tới người đi xe máy điện (24/28 người dùng xe máy điện, chỉ 4/28 chỉ đi ô tô), trong khi người dùng chính của lát cắt là tài xế ô tô điện. Các số trên vì vậy là bằng chứng pain của người đi xe điện nói chung, **chưa phải** của riêng tài xế ô tô đi du lịch; cần phỏng vấn thêm tài xế ô tô để kiểm lại trước CP3.
+  - Thận trọng: 12/28 người chưa từng tự tìm trạm công cộng (chỉ sạc ở nhà) nhưng vẫn chọn sự cố gặp phải.
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
@@ -71,7 +73,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 - Bị đòi ngoài phạm vi (lớp 3): · Trường hợp đặc thù lĩnh vực (lớp 4):
 
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
-- Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — __ câu (thuong __ · kho __ · tu_choi __) · metric: `eval/metric_spec.yaml` (__ metric)
+- Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 29 câu (thuong 9 · kho 17 · tu_choi 3; 11/29 từ khảo sát người dùng) · metric: `eval/metric_spec.yaml` (4 metric)
 - **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ __% câu qua, và __"
 - Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 

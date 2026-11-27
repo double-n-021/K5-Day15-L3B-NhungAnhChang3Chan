@@ -1,0 +1,30 @@
+[
+  {
+    "model": "VinFast VF e34",
+    "vehicle_type": "o_to",
+    "aliases": ["vfe34", "vf e34", "e34", "xanh sm"],
+    "battery_kwh": 41.9,
+    "range_km": 318,
+    "max_dc_kw": 60,
+    "connectors": ["CCS2"],
+    "cold_drain_pct": 15,
+    "heat_drain_pct": 10
+  },
+  {
+    "model": "VinFast Evo200 2023",
+    "vehicle_type": "xe_may",
+    "aliases": ["evo200", "evo 200", "vinfast evo200", "evo200 lite"],
+    "battery_kwh": 3.5,
+    "range_km": 145,
+    "range_km_tieu_chuan_30kmh": 203,
+    "max_dc_kw": 0,
+    "connectors": ["o_cam_220V", "tru_sac_xe_may_V-Green"],
+    "charger_w": 400,
+    "charge_hours_0_100": 10,
+    "fast_charger_w": 1000,
+    "fast_charge_hours_0_100": 4,
+    "cold_drain_pct": 15,
+    "heat_drain_pct": 10,
+    "note": "Xe máy điện: không sạc ở trụ DC ô tô (CCS2); sạc ổ 220V hoặc trụ sạc xe máy V-Green (>=1,2 kW/cổng). range_km = điều kiện hỗn hợp 145 km (203 km chỉ ở 30 km/h, 65 kg). Nguồn: shop.vinfastauto.com/vn_vi/xe-may-dien-evo200.html; vinfastauto.com/vn_vi/danh-gia-pin-xe-may-dien-vinfast-evo200 (xem 27/11/2026)"
+  }
+]
