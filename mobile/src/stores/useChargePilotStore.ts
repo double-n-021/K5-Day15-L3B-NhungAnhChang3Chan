@@ -26,6 +26,7 @@ import {
   parseVietnameseJourneyPrompt,
   timeToMinutes,
 } from '@/services/decisionEngine';
+import { fetchCurrentUserLocation } from '@/services/locationService';
 import type {
   ApiChatResponse,
   ApiConnectionStatus,
@@ -35,6 +36,7 @@ import type {
   ItineraryDecisionStatus,
   JourneyInput,
   ParsedNaturalRequest,
+  PlacePoint,
   ProposedItineraryOption,
   RecommendationResult,
   VehicleId,
@@ -84,6 +86,10 @@ interface ChargePilotState {
   rewardHistory: { id: string; title: string; points: number; time: string }[];
   voiceDrawerTrigger: number;
 
+  // Live GPS Origin state
+  gpsStatus: 'idle' | 'loading' | 'ready' | 'denied' | 'error';
+  locationLabel: string;
+
   // Demo Hackathon Mode
   isDemoActive: boolean;
   isDemoPlaying: boolean;
@@ -91,6 +97,8 @@ interface ChargePilotState {
 
   // Actions
   setVehicleId: (id: VehicleId) => void;
+  setUserOrigin: (place: PlacePoint, displayLabel?: string) => void;
+  refreshUserLocation: () => Promise<void>;
   setBatteryPct: (pct: number) => void;
   setArrivalDeadline: (hhmm: string) => void;
   shiftArrivalDeadline: (deltaMin: number) => void;
@@ -232,9 +240,38 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   ],
   voiceDrawerTrigger: 0,
 
+  gpsStatus: 'idle',
+  locationLabel: 'Đang định vị...',
+
   isDemoActive: false,
   isDemoPlaying: false,
   demoStepIndex: 0,
+
+  setUserOrigin: (place, displayLabel) => {
+    const nextInput = { ...get().journeyInput, origin: place };
+    const computed = recompute(nextInput, get().weather, get().activeScenarios, get().selectedStationId);
+    set({
+      journeyInput: nextInput,
+      ...computed,
+      locationLabel: displayLabel || `${place.shortName} · Hà Nội`,
+      gpsStatus: 'ready',
+    });
+  },
+
+  refreshUserLocation: async () => {
+    if (get().gpsStatus === 'loading') return;
+    set({ gpsStatus: 'loading', locationLabel: 'Đang lấy GPS...' });
+    const outcome = await fetchCurrentUserLocation();
+    if (outcome.status === 'ready' && outcome.place) {
+      get().setUserOrigin(outcome.place, outcome.displayLabel);
+      return;
+    }
+    set({
+      gpsStatus: outcome.status === 'denied' ? 'denied' : 'error',
+      locationLabel:
+        outcome.status === 'denied' ? 'Hà Nội (chưa bật GPS)' : 'Hà Nội (Vị trí mặc định)',
+    });
+  },
 
   setVehicleId: (id) => {
     const nextInput = { ...get().journeyInput, vehicleId: id };
@@ -333,6 +370,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
       hanoiResult: computed.recommendation,
       vehicleId: get().vehicleId,
       weather: computed.effectiveWeather,
+      originShortName: nextInput.origin.shortName,
     });
 
     set({

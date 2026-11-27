@@ -29,8 +29,6 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
-  Wifi,
-  WifiOff,
   XCircle,
 } from 'lucide-react-native';
 import { MascotAssistant } from '@/components/mascot/MascotAssistant';
@@ -97,6 +95,14 @@ const QUICK_FILL_CHIPS: Record<
   },
 };
 
+const INTENT_LABELS: Record<string, string> = {
+  recommendation: 'Đề xuất trạm sạc',
+  rescue: 'Cứu pin khẩn cấp',
+  home_charging: 'Sạc tại nhà',
+  ask_back: 'Cần bổ sung thông tin',
+  refusal: 'Ngoài phạm vi hỗ trợ',
+};
+
 const STAGE_ICON_COLOR: Record<JourneyStageType, string> = {
   departure: COLORS.textSecondary,
   driving: COLORS.navBlue,
@@ -124,7 +130,6 @@ export default function JourneyScreen() {
     greenPoints,
     voiceDrawerTrigger,
     setVehicleId,
-    analyzeNaturalPrompt,
     sendPromptToApi,
     confirmGreenToken,
     resetApiSession,
@@ -132,9 +137,6 @@ export default function JourneyScreen() {
     declineProposedItinerary,
     requestAlternativeOption,
     recommendation,
-    isDemoActive,
-    demoStepIndex,
-    apiStatus,
     apiLoading,
     apiError,
     apiSourceMode,
@@ -297,19 +299,6 @@ export default function JourneyScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!isDemoActive) return;
-    if (demoStepIndex === 4) {
-      setMode('chat');
-      const demoPrompt =
-        'Tôi còn 18% pin, 14h30 phải có mặt tại Hồ Gươm và sau đó đi sân bay Nội Bài.';
-      setPromptText(demoPrompt);
-      analyzeNaturalPrompt(demoPrompt);
-    } else if (demoStepIndex === 12) {
-      setMode('timeline');
-    }
-  }, [isDemoActive, demoStepIndex, analyzeNaturalPrompt]);
-
   const handleToggleMic = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     if (isListening) {
@@ -417,38 +406,10 @@ export default function JourneyScreen() {
       {/* Minimal Header */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary }]}>
+          <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary, flex: 1 }]} numberOfLines={1}>
             Trợ lý ChargePilot
           </Text>
           <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => router.push('/(tabs)/vehicle')}
-              style={[
-                styles.apiPill,
-                apiStatus === 'online'
-                  ? { backgroundColor: COLORS.energyGreenDim, borderColor: COLORS.energyGreenBorder }
-                  : { backgroundColor: COLORS.surface, borderColor: COLORS.border },
-              ]}
-              accessibilityLabel="Trạng thái kết nối máy chủ VPS"
-            >
-              {apiStatus === 'online' ? (
-                <Wifi size={12} color={COLORS.energyGreen} />
-              ) : (
-                <WifiOff size={12} color={COLORS.textSecondary} />
-              )}
-              <Text
-                style={[
-                  TYPOGRAPHY.micro,
-                  {
-                    color: apiStatus === 'online' ? COLORS.energyGreen : COLORS.textSecondary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {apiStatus === 'online' ? 'Live AI' : 'Offline'}
-              </Text>
-            </Pressable>
-
             <Pressable
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
@@ -464,10 +425,10 @@ export default function JourneyScreen() {
             <View style={styles.pointsBadge}>
               <Image
                 source={ASSETS_3D.trophyGold}
-                style={{ width: 16, height: 16 }}
+                style={{ width: 16, height: 16, flexShrink: 0 }}
                 contentFit="contain"
               />
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]} numberOfLines={1}>
                 {greenPoints}đ
               </Text>
             </View>
@@ -524,17 +485,13 @@ export default function JourneyScreen() {
               compact={isKeyboardOpen}
             />
 
-            {/* Offline fallback banner when VPS API could not be reached */}
+            {/* Subtle offline fallback note when network is unavailable */}
             {apiError && apiSourceMode === 'offline_fallback' && (
-              <Pressable
-                onPress={() => router.push('/(tabs)/vehicle')}
-                style={styles.offlineBanner}
-              >
-                <WifiOff size={15} color={COLORS.warningAmber} />
+              <View style={styles.offlineBanner}>
                 <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, flex: 1 }]}>
-                  Chưa nối được VPS ({apiError}) — đang dùng bộ mô phỏng offline. Chạm để cấu hình URL.
+                  Đang tạm dùng chế độ ngoại tuyến (không có kết nối mạng).
                 </Text>
-              </Pressable>
+              </View>
             )}
 
             {/* Open Settings CTA if Microphone permission is permanently blocked */}
@@ -581,15 +538,15 @@ export default function JourneyScreen() {
               </Animated.View>
             )}
 
-            {/* Live AI Full Reply & Guardrail Metadata Card */}
+            {/* AI Full Reply Card */}
             {!busyThinking && apiSourceMode === 'live' && lastApiResponse && (
               <Animated.View entering={FadeInDown.duration(200)} style={styles.liveReplyCard}>
                 <View style={styles.liveReplyHeader}>
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700' }]}>
-                    {lastApiResponse.guardrails.model} · {lastApiResponse.meta.latency_ms}ms
+                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
+                    Trợ lý ChargePilot AI
                   </Text>
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-                    {lastApiResponse.intent_state}
+                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, flexShrink: 0 }]} numberOfLines={1}>
+                    {INTENT_LABELS[lastApiResponse.intent_state] || 'Tư vấn sạc'}
                   </Text>
                 </View>
                 <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, lineHeight: 20 }]}>
@@ -970,6 +927,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerActions: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1016,8 +974,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   pointsBadge: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,

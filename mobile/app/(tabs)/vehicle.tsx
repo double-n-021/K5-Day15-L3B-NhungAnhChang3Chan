@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -11,17 +11,13 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Info,
   Minus,
-  Play,
   Plus,
   RefreshCw,
-  Server,
   ShieldCheck,
-  WifiOff,
 } from 'lucide-react-native';
 import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
@@ -44,27 +40,15 @@ export default function VehicleScreen() {
     recommendation,
     greenPoints,
     rewardHistory,
-    startDemo,
-    apiBaseUrl,
-    apiStatus,
-    apiModelName,
-    apiError,
     leaderboard,
     driverName,
-    setApiBaseUrl,
     setDriverName,
-    checkServerHealth,
     refreshLeaderboard,
   } = useChargePilotStore();
 
   const [showLicenses, setShowLicenses] = useState(false);
   const [angleIdx, setAngleIdx] = useState(0);
-  const [urlDraft, setUrlDraft] = useState(apiBaseUrl);
   const [nameDraft, setNameDraft] = useState(driverName);
-
-  useEffect(() => {
-    setUrlDraft(apiBaseUrl);
-  }, [apiBaseUrl]);
 
   const vehicle = VEHICLES[vehicleId];
   const activeAngle = vehicle.angles[angleIdx] ?? vehicle.angles[0];
@@ -136,7 +120,7 @@ export default function VehicleScreen() {
             <Image
               source={activeAngle.source}
               style={styles.heroImage}
-              contentFit="cover"
+              contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
               transition={150}
             />
             {vehicle.angles.length > 1 && (
@@ -317,20 +301,20 @@ export default function VehicleScreen() {
           </View>
         </View>
 
-        {/* Green Off-Peak Points & Demo Mode */}
+        {/* Green Off-Peak Points */}
         <View style={styles.cardPad}>
-          <View style={styles.rowBetween}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={styles.greenHeaderRow}>
+            <View style={styles.greenTitleLeft}>
               <Image
                 source={ASSETS_3D.trophyGold}
-                style={{ width: 24, height: 24 }}
+                style={{ width: 22, height: 22, flexShrink: 0 }}
                 contentFit="contain"
               />
-              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]}>
-                Điểm Sạc Xanh (Trưa nắng)
+              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
+                Điểm Sạc Xanh
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.greenScoreRight}>
               <Pressable
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
@@ -341,122 +325,11 @@ export default function VehicleScreen() {
               >
                 <RefreshCw size={14} color={COLORS.textSecondary} />
               </Pressable>
-              <Text style={[TYPOGRAPHY.metricLarge, { color: COLORS.warningAmber }]}>
+              <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.warningAmber }]} numberOfLines={1}>
                 {greenPoints}đ
               </Text>
             </View>
           </View>
-          {rewardHistory.slice(0, 3).map((item) => (
-            <View key={item.id} style={styles.rowBetween}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                <Image
-                  source={ASSETS_3D.medalGold}
-                  style={{ width: 16, height: 16 }}
-                  contentFit="contain"
-                />
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-              </View>
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]}>
-                +{item.points}đ
-              </Text>
-            </View>
-          ))}
-          {leaderboard.length > 0 && (
-            <View style={styles.leaderboardBox}>
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '700' }]}>
-                Bảng xếp hạng máy chủ (Live)
-              </Text>
-              {leaderboard.slice(0, 3).map((row) => (
-                <View key={`${row.rank}-${row.user_name}`} style={styles.rowBetween}>
-                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary }]}>
-                    #{row.rank} {row.user_name} ({row.green_sessions} phiên)
-                  </Text>
-                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.warningAmber, fontWeight: '700' }]}>
-                    {row.total_points}đ
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-          <Pressable
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              startDemo();
-            }}
-            style={styles.demoTriggerBtn}
-          >
-            <Play size={15} color="#0B1017" fill="#0B1017" />
-            <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
-              Chạy trình diễn Demo Hackathon (13 bước)
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* VPS API Contract v1.0.0 Configuration */}
-        <View style={styles.cardPad}>
-          <View style={styles.rowBetween}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Server size={18} color={COLORS.energyGreen} />
-              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]}>
-                Kết nối máy chủ VPS (API v1.0.0)
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.apiStatusBadge,
-                apiStatus === 'online'
-                  ? { backgroundColor: COLORS.energyGreenDim, borderColor: COLORS.energyGreenBorder }
-                  : apiStatus === 'offline'
-                    ? { backgroundColor: COLORS.criticalRedDim, borderColor: COLORS.criticalRedBorder }
-                    : { backgroundColor: COLORS.surfaceElevated, borderColor: COLORS.border },
-              ]}
-            >
-              {apiStatus === 'online' ? (
-                <CheckCircle2 size={12} color={COLORS.energyGreen} />
-              ) : apiStatus === 'offline' ? (
-                <WifiOff size={12} color={COLORS.criticalRed} />
-              ) : null}
-              <Text
-                style={[
-                  TYPOGRAPHY.micro,
-                  {
-                    color:
-                      apiStatus === 'online'
-                        ? COLORS.energyGreen
-                        : apiStatus === 'offline'
-                          ? COLORS.criticalRed
-                          : COLORS.textSecondary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {apiStatus === 'checking'
-                  ? 'Đang kiểm...'
-                  : apiStatus === 'online'
-                    ? `Online${apiModelName ? ` · ${apiModelName}` : ''}`
-                    : apiStatus === 'offline'
-                      ? 'Offline'
-                      : 'Chưa kiểm'}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-            Emulator: http://10.0.2.2:8000 · VPS: https://&lt;tunnel&gt;.trycloudflare.com
-          </Text>
-
-          <TextInput
-            value={urlDraft}
-            onChangeText={setUrlDraft}
-            placeholder="https://your-vps-tunnel.trycloudflare.com"
-            placeholderTextColor={COLORS.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            style={styles.apiInput}
-          />
 
           <TextInput
             value={nameDraft}
@@ -464,31 +337,45 @@ export default function VehicleScreen() {
               setNameDraft(txt);
               setDriverName(txt);
             }}
-            placeholder="Tên tài xế trên Green Leaderboard"
+            placeholder="Tên tài xế hiển thị trên Bảng xếp hạng"
             placeholderTextColor={COLORS.textMuted}
             style={styles.apiInput}
           />
 
-          {apiError && apiStatus === 'offline' && (
-            <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
-              Lỗi kết nối: {apiError} (đang dùng engine offline dự phòng)
-            </Text>
+          {rewardHistory.slice(0, 3).map((item) => (
+            <View key={item.id} style={styles.rowBetween}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 }}>
+                <Image
+                  source={ASSETS_3D.medalGold}
+                  style={{ width: 16, height: 16, flexShrink: 0 }}
+                  contentFit="contain"
+                />
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+              </View>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flexShrink: 0 }]}>
+                +{item.points}đ
+              </Text>
+            </View>
+          ))}
+          {leaderboard.length > 0 && (
+            <View style={styles.leaderboardBox}>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '700' }]}>
+                Bảng xếp hạng Sạc Xanh
+              </Text>
+              {leaderboard.slice(0, 3).map((row) => (
+                <View key={`${row.rank}-${row.user_name}`} style={styles.rowBetween}>
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1, paddingRight: 8 }]} numberOfLines={1}>
+                    #{row.rank} {row.user_name} ({row.green_sessions} phiên)
+                  </Text>
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.warningAmber, fontWeight: '700', flexShrink: 0 }]}>
+                    {row.total_points}đ
+                  </Text>
+                </View>
+              ))}
+            </View>
           )}
-
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setApiBaseUrl(urlDraft);
-              setDriverName(nameDraft);
-              void checkServerHealth();
-            }}
-            style={styles.checkApiBtn}
-          >
-            <RefreshCw size={15} color="#0B1017" />
-            <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
-              Kiểm tra kết nối (/health)
-            </Text>
-          </Pressable>
         </View>
 
         {/* Asset Licenses */}
@@ -638,6 +525,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+  },
+  greenHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  greenTitleLeft: {
+    flex: 1,
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  greenScoreRight: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   batteryBtnsRow: {
     flexDirection: 'row',

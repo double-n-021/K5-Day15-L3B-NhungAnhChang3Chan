@@ -24,7 +24,9 @@
     "android": {
       "package": "com.chargepilot.ai",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B1017",
@@ -35,6 +37,7 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      "./plugins/withChargePilotNative",
       "expo-router",
       [
         "expo-status-bar",

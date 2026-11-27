@@ -17,7 +17,7 @@ import {
   Inter_700Bold,
   useFonts as useNumFonts,
 } from '@expo-google-fonts/inter';
-import { HackathonDemoOverlay } from '@/components/shared/HackathonDemoOverlay';
+import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -43,6 +43,12 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsReady]);
+
+  useEffect(() => {
+    const store = useChargePilotStore.getState();
+    void store.checkServerHealth();
+    void store.refreshUserLocation();
+  }, []);
 
   if (!fontsReady) {
     return (
@@ -81,7 +87,6 @@ export default function RootLayout() {
             options={{ headerShown: false, presentation: 'fullScreenModal' }}
           />
         </Stack>
-        <HackathonDemoOverlay />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

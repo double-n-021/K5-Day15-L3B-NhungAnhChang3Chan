@@ -10,11 +10,13 @@ Chạy server:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import re
 import sys
+import tempfile
 import threading
 import time
 from urllib.parse import urlparse
@@ -48,6 +50,13 @@ SESSIONS: dict[str, dict] = {}
 PENDING_TOKENS: dict[str, dict] = {}
 LEADERBOARD: dict[str, dict] = {}
 
+VN_TZ = timezone(timedelta(hours=7))
+SERVER_STARTED_AT = time.time()
+MAX_MEMORY_LOGS = 500
+REQUEST_LOGS: list[dict] = []
+APK_DOWNLOAD_COUNT = 0
+_RESOLVED_LOG_PATH: str | None = None
+
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -59,12 +68,13 @@ HTML_PAGE = """<!DOCTYPE html>
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); }
   .wrap { max-width:780px; margin:0 auto; padding:24px 16px 48px; }
-  .hero { background:#042f2e; color:#f0fdfa; border-radius:18px; padding:24px; margin-bottom:18px; }
+  .hero { background:#042f2e; color:#f0fdfa; border-radius:18px; padding:24px; margin-bottom:18px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
   .hero h1 { margin:0 0 8px; font-size:24px; }
   .hero p { margin:0; color:#ccfbf1; font-size:14.5px; line-height:1.5; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:16px; }
   .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
   .btn { display:inline-block; background:var(--jade); color:#fff; text-decoration:none; border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:14px; cursor:pointer; }
+  .btn-ghost { background:#0f172a; color:#36e6a3; border:1px solid #1e293b; }
   textarea { width:100%; min-height:84px; padding:12px; border:1px solid var(--line); border-radius:10px; font:inherit; margin:10px 0; }
   pre { background:#0f172a; color:#e2e8f0; padding:14px; border-radius:10px; overflow:auto; white-space:pre-wrap; font-size:13px; }
   .muted { color:var(--muted); font-size:13px; }
@@ -73,8 +83,11 @@ HTML_PAGE = """<!DOCTYPE html>
 <body>
 <div class="wrap">
   <div class="hero">
-    <h1>CHARGEPILOT API (v1.0.0)</h1>
-    <p>Trợ lý gợi ý Top 3 trạm sạc EV &amp; khung giờ sạc tại Hà Nội cho Android APK và Web.</p>
+    <div>
+      <h1>CHARGEPILOT API (v1.0.0)</h1>
+      <p>Trợ lý gợi ý Top 3 trạm sạc EV &amp; khung giờ sạc tại Hà Nội cho Android APK và Web.</p>
+    </div>
+    <a class="btn btn-ghost" href="/dashboard">Dashboard Giám sát Log</a>
   </div>
   <div class="card row">
     <div>
@@ -569,6 +582,537 @@ def get_leaderboard() -> list[dict]:
         return [{"rank": idx, **row} for idx, row in enumerate(rows, start=1)]
 
 
+def _log_file_path() -> str:
+    """Chọn đường dẫn file log JSONL có thể ghi (ưu tiên releases/, fallback tmp)."""
+    global _RESOLVED_LOG_PATH
+    if _RESOLVED_LOG_PATH:
+        return _RESOLVED_LOG_PATH
+    candidates = [
+        os.path.join(RELEASES_DIR, "api_logs.jsonl"),
+        os.path.join(tempfile.gettempdir(), "chargepilot_api_logs.jsonl"),
+    ]
+    for cand in candidates:
+        try:
+            os.makedirs(os.path.dirname(cand), exist_ok=True)
+            with open(cand, "a", encoding="utf-8"):
+                pass
+            _RESOLVED_LOG_PATH = cand
+            return cand
+        except Exception:
+            continue
+    _RESOLVED_LOG_PATH = candidates[-1]
+    return _RESOLVED_LOG_PATH
+
+
+def _load_recent_logs() -> None:
+    """Nạp lại tối đa MAX_MEMORY_LOGS dòng log gần nhất khi server khởi động."""
+    path = _log_file_path()
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-MAX_MEMORY_LOGS:]
+        loaded = []
+        for ln in lines:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                obj = json.loads(ln)
+                if isinstance(obj, dict):
+                    loaded.append(obj)
+            except Exception:
+                continue
+        if loaded:
+            with STATE_LOCK:
+                REQUEST_LOGS.extend(loaded[-MAX_MEMORY_LOGS:])
+    except Exception:
+        pass
+
+
+def _mask_ip(ip: str) -> str:
+    """Ẩn phần cuối địa chỉ IP để tránh lưu nguyên IP người dùng trong log."""
+    raw = (ip or "").strip()
+    if not raw:
+        return "-"
+    if "." in raw:
+        parts = raw.split(".")
+        if len(parts) == 4:
+            return f"{parts[0]}.{parts[1]}.{parts[2]}.*"
+    if ":" in raw:
+        return raw.rsplit(":", 1)[0] + ":*"
+    return raw
+
+
+def _record_request_log(
+    method: str,
+    path: str,
+    status: int,
+    latency_ms: int,
+    client_ip: str = "",
+    resp: dict | None = None,
+    query_text: str = "",
+) -> None:
+    """Ghi log hoạt động vào RAM + file JSONL (tự động ẩn OTP nếu có)."""
+    safe_query = (query_text or "").strip()
+    if safe_query:
+        otps = agent.OTP_RE.findall(safe_query)
+        if otps:
+            safe_query = _scrub_otp(safe_query, otps)
+    if len(safe_query) > 120:
+        safe_query = safe_query[:117] + "..."
+
+    meta = resp.get("meta") if isinstance(resp, dict) and isinstance(resp.get("meta"), dict) else {}
+    guard = resp.get("guardrails") if isinstance(resp, dict) and isinstance(resp.get("guardrails"), dict) else {}
+    stations = resp.get("stations") if isinstance(resp, dict) and isinstance(resp.get("stations"), list) else []
+
+    now_dt = datetime.now(VN_TZ)
+    entry = {
+        "id": uuid.uuid4().hex[:10],
+        "ts_epoch": round(time.time(), 3),
+        "ts": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        "hour_key": now_dt.strftime("%H:00"),
+        "method": method,
+        "path": path,
+        "status": int(status),
+        "latency_ms": int(max(0, latency_ms)),
+        "intent_state": (resp.get("intent_state") if isinstance(resp, dict) else None) or "-",
+        "model": guard.get("model") or (ai.MODEL_NAME or ai.MODEL_PROVIDER or "-"),
+        "model_calls": int(meta.get("model_calls") or 0),
+        "tool_calls": int(meta.get("tool_calls") or 0),
+        "tokens_in": int(meta.get("tokens_in") or 0),
+        "tokens_out": int(meta.get("tokens_out") or 0),
+        "fallback_used": bool(guard.get("fallback_used", False)),
+        "stations_count": len(stations),
+        "session_id": (resp.get("session_id") if isinstance(resp, dict) else None) or "",
+        "query_preview": safe_query,
+        "error": (resp.get("error") if isinstance(resp, dict) else None) or "",
+        "client_ip": _mask_ip(client_ip),
+    }
+
+    with STATE_LOCK:
+        REQUEST_LOGS.append(entry)
+        if len(REQUEST_LOGS) > MAX_MEMORY_LOGS:
+            del REQUEST_LOGS[:-MAX_MEMORY_LOGS]
+
+    try:
+        with open(_log_file_path(), "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _format_uptime(seconds: float) -> str:
+    sec = max(0, int(seconds))
+    days, rem = divmod(sec, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins, secs = divmod(rem, 60)
+    if days > 0:
+        return f"{days}d {hours:02d}h {mins:02d}m"
+    return f"{hours:02d}h {mins:02d}m {secs:02d}s"
+
+
+def build_dashboard_stats() -> dict:
+    """Tổng hợp số liệu vận hành và danh sách log gần nhất cho Operations Dashboard."""
+    now_epoch = time.time()
+    uptime_s = now_epoch - SERVER_STARTED_AT
+    with STATE_LOCK:
+        logs = list(REQUEST_LOGS)
+        active_sessions = len(SESSIONS)
+        apk_downloads = APK_DOWNLOAD_COUNT
+
+    total = len(logs)
+    chat_paths = ("/api/v1/chat", "/api/chat", "/api/ask", "/api/optimize")
+    chat_logs = [x for x in logs if x.get("path") in chat_paths]
+    ok_2xx = sum(1 for x in logs if 200 <= int(x.get("status", 0)) < 300)
+    err_4xx = sum(1 for x in logs if 400 <= int(x.get("status", 0)) < 500)
+    err_5xx = sum(1 for x in logs if int(x.get("status", 0)) >= 500)
+
+    recent_slice = logs[-20:]
+    recent_5xx_rate = (
+        sum(1 for x in recent_slice if int(x.get("status", 0)) >= 500) / len(recent_slice)
+        if recent_slice else 0.0
+    )
+    health_status = "degraded" if recent_5xx_rate > 0.1 else "healthy"
+
+    latencies = sorted(int(x.get("latency_ms", 0)) for x in chat_logs) if chat_logs else sorted(
+        int(x.get("latency_ms", 0)) for x in logs
+    )
+    avg_latency = int(round(sum(latencies) / len(latencies))) if latencies else 0
+    p95_idx = min(len(latencies) - 1, max(0, int(len(latencies) * 0.95) - 1)) if latencies else 0
+    p95_latency = latencies[p95_idx] if latencies else 0
+
+    tokens_in = sum(int(x.get("tokens_in", 0)) for x in logs)
+    tokens_out = sum(int(x.get("tokens_out", 0)) for x in logs)
+    # Bảng giá tham chiếu spec.md §8: claude-haiku-5-5 ($0.10 in / $0.50 out per 1M tokens)
+    est_cost_usd = (tokens_in / 1_000_000.0) * 0.10 + (tokens_out / 1_000_000.0) * 0.50
+    est_cost_vnd = int(round(est_cost_usd * 25400))
+
+    fallback_count = sum(1 for x in chat_logs if x.get("fallback_used"))
+    intents = {"recommendation": 0, "ask_back": 0, "rescue": 0, "home_charging": 0, "refusal": 0, "other": 0}
+    for x in chat_logs:
+        st = x.get("intent_state") or "other"
+        intents[st if st in intents else "other"] += 1
+
+    now_dt = datetime.now(VN_TZ)
+    hour_labels = [(now_dt - timedelta(hours=i)).strftime("%H:00") for i in range(11, -1, -1)]
+    cutoff = now_epoch - 12 * 3600
+    hour_map = {h: {"hour": h, "ok": 0, "err": 0} for h in hour_labels}
+    for x in logs:
+        if float(x.get("ts_epoch", 0)) >= cutoff:
+            hk = x.get("hour_key")
+            if hk in hour_map:
+                if int(x.get("status", 0)) >= 400:
+                    hour_map[hk]["err"] += 1
+                else:
+                    hour_map[hk]["ok"] += 1
+
+    model_val = ai.MODEL_NAME or ("fake" if ai.MODEL_PROVIDER == "fake" else "unknown")
+    return {
+        "ok": True,
+        "generated_at": now_dt.strftime("%Y-%m-%d %H:%M:%S +07"),
+        "service": "CHARGEPILOT API",
+        "contract_version": CONTRACT_VERSION,
+        "model_provider": ai.MODEL_PROVIDER,
+        "model_name": model_val,
+        "uptime_s": int(uptime_s),
+        "uptime_human": _format_uptime(uptime_s),
+        "health_status": health_status,
+        "summary": {
+            "total_requests": total,
+            "chat_requests": len(chat_logs),
+            "ok_2xx": ok_2xx,
+            "err_4xx": err_4xx,
+            "err_5xx": err_5xx,
+            "success_rate_pct": round((ok_2xx / total) * 100, 1) if total else 100.0,
+            "avg_latency_ms": avg_latency,
+            "p95_latency_ms": p95_latency,
+            "total_tokens_in": tokens_in,
+            "total_tokens_out": tokens_out,
+            "est_cost_usd": round(est_cost_usd, 5),
+            "est_cost_vnd": est_cost_vnd,
+            "fallback_count": fallback_count,
+            "active_sessions": active_sessions,
+            "apk_downloads": apk_downloads,
+        },
+        "intents": intents,
+        "hourly": [hour_map[h] for h in hour_labels],
+        "apk_meta": _release_meta(),
+        "leaderboard": get_leaderboard()[:5],
+        "logs": list(reversed(logs[-100:])),
+    }
+
+
+DASHBOARD_HTML = """<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CHARGEPILOT — Operations &amp; Log Dashboard</title>
+<style>
+  :root {
+    --bg:#0B1017; --surface:#121A24; --elev:#182330; --line:#233142;
+    --ink:#F4F7FB; --muted:#94A3B8; --green:#36E6A3; --blue:#60A5FA;
+    --amber:#FBBF24; --red:#F87171;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:1240px; margin:0 auto; padding:20px 16px 48px; }
+  .topbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px 20px; margin-bottom:16px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .pulse { width:12px; height:12px; border-radius:50%; background:var(--green); box-shadow:0 0 12px var(--green); }
+  .pulse.degraded { background:var(--red); box-shadow:0 0 12px var(--red); }
+  .brand h1 { margin:0; font-size:20px; }
+  .brand small { color:var(--muted); font-size:12.5px; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .btn { background:var(--elev); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; }
+  .btn-primary { background:var(--green); color:#0B1017; border-color:var(--green); }
+  .grid-kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:16px; }
+  .kpi { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .kpi .lbl { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:0.4px; }
+  .kpi .val { font-size:24px; font-weight:700; margin:6px 0 4px; }
+  .kpi .sub { color:var(--muted); font-size:12px; }
+  .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card h2 { margin:0 0 12px; font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
+  .bar-name { width:130px; color:var(--muted); }
+  .bar-track { flex:1; height:10px; background:var(--elev); border-radius:999px; overflow:hidden; }
+  .bar-fill { height:100%; background:var(--green); border-radius:999px; }
+  .bar-cnt { width:44px; text-align:right; font-weight:600; }
+  .chart { display:flex; align-items:flex-end; gap:6px; height:110px; padding-top:12px; }
+  .col-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end; }
+  .col-bar { width:100%; max-width:28px; background:var(--blue); border-radius:4px 4px 0 0; min-height:2px; }
+  .col-err { width:100%; max-width:28px; background:var(--red); border-radius:4px 4px 0 0; }
+  .col-lbl { font-size:10px; color:var(--muted); }
+  .filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .chip { background:var(--elev); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:6px 12px; font-size:12.5px; cursor:pointer; }
+  .chip.active { background:var(--green); color:#0B1017; border-color:var(--green); font-weight:700; }
+  .tbl-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; white-space:nowrap; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .t-ok { background:rgba(54,230,163,0.16); color:var(--green); }
+  .t-warn { background:rgba(251,191,36,0.16); color:var(--amber); }
+  .t-err { background:rgba(248,113,113,0.16); color:var(--red); }
+  .t-info { background:rgba(96,165,250,0.16); color:var(--blue); }
+  .mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div id="pulseDot" class="pulse"></div>
+      <div>
+        <h1>CHARGEPILOT — Operations Dashboard</h1>
+        <small id="metaLine">Đang tải trạng thái hệ thống...</small>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="autoBtn" onclick="toggleAuto()">Tự làm mới: 5s</button>
+      <button class="btn" onclick="loadStats()">Làm mới ngay</button>
+      <button class="btn btn-primary" onclick="runPingTest()">Test Live AI Ping</button>
+      <a class="btn" href="/">Trang Test &amp; APK</a>
+    </div>
+  </div>
+
+  <div class="grid-kpi">
+    <div class="kpi"><div class="lbl">Trạng thái &amp; Uptime</div><div class="val" id="kHealth">-</div><div class="sub" id="kUptime">-</div></div>
+    <div class="kpi"><div class="lbl">Tổng Request / Thành công</div><div class="val" id="kTotal">-</div><div class="sub" id="kBreakdown">-</div></div>
+    <div class="kpi"><div class="lbl">Độ trễ AI (TB / P95)</div><div class="val" id="kLat">-</div><div class="sub" id="kFallback">-</div></div>
+    <div class="kpi"><div class="lbl">Token &amp; Chi phí ước tính</div><div class="val" id="kCost">-</div><div class="sub" id="kTokens">-</div></div>
+    <div class="kpi"><div class="lbl">APK &amp; Phiên đang giữ</div><div class="val" id="kApk">-</div><div class="sub" id="kSessions">-</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Phân bố Intent AI <span class="mono" id="intentTotal" style="color:var(--muted);font-size:12px">0 chat</span></h2>
+      <div id="intentBars"></div>
+    </div>
+    <div class="card">
+      <h2>Lưu lượng 12 giờ gần nhất <span style="color:var(--muted);font-size:12px">Xanh: OK · Đỏ: Lỗi</span></h2>
+      <div class="chart" id="hourlyChart"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Nhật ký Request / Log gần nhất <span id="logCount" style="color:var(--muted);font-size:12px">0 dòng</span></h2>
+    <div class="filters">
+      <button class="chip active" onclick="setFilter('all', this)">Tất cả</button>
+      <button class="chip" onclick="setFilter('chat', this)">Chỉ Chat AI</button>
+      <button class="chip" onclick="setFilter('err', this)">Lỗi (4xx/5xx)</button>
+      <button class="chip" onclick="setFilter('slow', this)">Chậm (&gt;3000ms)</button>
+      <button class="chip" onclick="setFilter('safety', this)">Rescue &amp; Refusal</button>
+      <button class="chip" onclick="setFilter('apk', this)">Tải APK</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Thời gian (+07)</th>
+            <th>Endpoint</th>
+            <th>HTTP</th>
+            <th>Intent</th>
+            <th>Latency</th>
+            <th>Model / Tools</th>
+            <th>Tokens</th>
+            <th>Nội dung / Ghi chú</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+let autoRefresh = true;
+let timerId = null;
+let latestStats = null;
+
+function setFilter(name, btn) {
+  currentFilter = name;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderLogs();
+}
+
+function toggleAuto() {
+  autoRefresh = !autoRefresh;
+  document.getElementById('autoBtn').textContent = autoRefresh ? 'Tự làm mới: 5s' : 'Đã tạm dừng';
+  scheduleNext();
+}
+
+function scheduleNext() {
+  if (timerId) clearTimeout(timerId);
+  if (autoRefresh) timerId = setTimeout(loadStats, 5000);
+}
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+
+function intentBadge(intent) {
+  if (intent === 'rescue') return ['t-warn', 'rescue'];
+  if (intent === 'refusal') return ['t-err', 'refusal'];
+  if (intent === 'ask_back') return ['t-info', 'ask_back'];
+  if (intent === 'recommendation' || intent === 'home_charging') return ['t-ok', intent];
+  return ['t-info', intent || '-'];
+}
+
+function renderLogs() {
+  const tbody = document.getElementById('logBody');
+  tbody.innerHTML = '';
+  const logs = (latestStats && latestStats.logs) ? latestStats.logs : [];
+  const filtered = logs.filter(x => {
+    if (currentFilter === 'chat') return ['/api/v1/chat','/api/chat','/api/ask','/api/optimize'].includes(x.path);
+    if (currentFilter === 'err') return x.status >= 400;
+    if (currentFilter === 'slow') return x.latency_ms >= 3000;
+    if (currentFilter === 'safety') return x.intent_state === 'rescue' || x.intent_state === 'refusal';
+    if (currentFilter === 'apk') return String(x.path || '').startsWith('/download/');
+    return true;
+  });
+  document.getElementById('logCount').textContent = filtered.length + ' dòng hiển thị / ' + logs.length + ' log';
+  filtered.slice(0, 60).forEach(x => {
+    const tr = document.createElement('tr');
+    tr.appendChild(el('td', 'mono', x.ts));
+    tr.appendChild(el('td', 'mono', x.method + ' ' + x.path));
+    const tdSt = document.createElement('td');
+    tdSt.appendChild(el('span', 'tag ' + (x.status >= 500 ? 't-err' : x.status >= 400 ? 't-warn' : 't-ok'), x.status));
+    tr.appendChild(tdSt);
+    const tdIn = document.createElement('td');
+    const [icls, itxt] = intentBadge(x.intent_state);
+    tdIn.appendChild(el('span', 'tag ' + icls, itxt));
+    tr.appendChild(tdIn);
+    tr.appendChild(el('td', 'mono', x.latency_ms + ' ms'));
+    tr.appendChild(el('td', 'mono', (x.model || '-') + ' (' + (x.tool_calls || 0) + 't)'));
+    tr.appendChild(el('td', 'mono', (x.tokens_in || 0) + ' / ' + (x.tokens_out || 0)));
+    const note = x.error ? ('ERR: ' + x.error) : (x.query_preview || (x.stations_count ? (x.stations_count + ' trạm') : '-'));
+    tr.appendChild(el('td', '', note));
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDashboard(d) {
+  latestStats = d;
+  const s = d.summary || {};
+  const dot = document.getElementById('pulseDot');
+  dot.className = 'pulse' + (d.health_status === 'degraded' ? ' degraded' : '');
+  document.getElementById('metaLine').textContent =
+    'Provider: ' + d.model_provider + ' (' + d.model_name + ') · Contract v' + d.contract_version + ' · Cập nhật: ' + d.generated_at;
+
+  document.getElementById('kHealth').textContent = d.health_status === 'healthy' ? 'ỔN ĐỊNH' : 'CẢNH BÁO';
+  document.getElementById('kHealth').style.color = d.health_status === 'healthy' ? 'var(--green)' : 'var(--red)';
+  document.getElementById('kUptime').textContent = 'Uptime: ' + d.uptime_human;
+
+  document.getElementById('kTotal').textContent = s.total_requests + ' (' + s.success_rate_pct + '%)';
+  document.getElementById('kBreakdown').textContent = 'Chat: ' + s.chat_requests + ' · 4xx: ' + s.err_4xx + ' · 5xx: ' + s.err_5xx;
+
+  document.getElementById('kLat').textContent = s.avg_latency_ms + ' / ' + s.p95_latency_ms + ' ms';
+  document.getElementById('kFallback').textContent = 'Fallback guardrail: ' + s.fallback_count + ' lần';
+
+  document.getElementById('kCost').textContent = s.est_cost_vnd.toLocaleString('vi-VN') + ' ₫';
+  document.getElementById('kTokens').textContent = 'In: ' + s.total_tokens_in + ' · Out: ' + s.total_tokens_out + ' ($' + s.est_cost_usd + ')';
+
+  const apk = d.apk_meta || {};
+  document.getElementById('kApk').textContent = (s.apk_downloads || 0) + ' lượt tải';
+  document.getElementById('kSessions').textContent =
+    (apk.available ? (apk.version + ' · ' + apk.size_mb + ' MB') : 'Chưa có APK') + ' · Session: ' + s.active_sessions;
+
+  const intents = d.intents || {};
+  const chatTotal = Math.max(1, s.chat_requests || 0);
+  document.getElementById('intentTotal').textContent = (s.chat_requests || 0) + ' chat';
+  const iBox = document.getElementById('intentBars');
+  iBox.innerHTML = '';
+  const order = [
+    ['recommendation', 'Đề xuất trạm', 'var(--green)'],
+    ['ask_back', 'Hỏi lại thiếu tin', 'var(--blue)'],
+    ['rescue', 'Cứu pin <15%', 'var(--amber)'],
+    ['home_charging', 'Sạc tại nhà', '#A78BFA'],
+    ['refusal', 'Từ chối an toàn', 'var(--red)'],
+  ];
+  order.forEach(([key, label, col]) => {
+    const cnt = intents[key] || 0;
+    const pct = Math.round((cnt / chatTotal) * 100);
+    const row = el('div', 'bar-row');
+    row.appendChild(el('div', 'bar-name', label));
+    const trk = el('div', 'bar-track');
+    const fill = el('div', 'bar-fill');
+    fill.style.width = pct + '%';
+    fill.style.background = col;
+    trk.appendChild(fill);
+    row.appendChild(trk);
+    row.appendChild(el('div', 'bar-cnt', cnt));
+    iBox.appendChild(row);
+  });
+
+  const chart = document.getElementById('hourlyChart');
+  chart.innerHTML = '';
+  const hourly = d.hourly || [];
+  const maxVal = Math.max(1, ...hourly.map(h => (h.ok || 0) + (h.err || 0)));
+  hourly.forEach(h => {
+    const col = el('div', 'col-wrap');
+    const okH = Math.round(((h.ok || 0) / maxVal) * 76);
+    const errH = Math.round(((h.err || 0) / maxVal) * 76);
+    if (errH > 0) {
+      const eb = el('div', 'col-err');
+      eb.style.height = errH + 'px';
+      eb.title = h.hour + ': ' + h.err + ' lỗi';
+      col.appendChild(eb);
+    }
+    const ob = el('div', 'col-bar');
+    ob.style.height = Math.max(2, okH) + 'px';
+    ob.title = h.hour + ': ' + h.ok + ' thành công';
+    col.appendChild(ob);
+    col.appendChild(el('div', 'col-lbl', h.hour.slice(0, 2)));
+    chart.appendChild(col);
+  });
+
+  renderLogs();
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch('/api/dashboard/stats');
+    const d = await r.json();
+    renderDashboard(d);
+  } catch (e) {
+    document.getElementById('kHealth').textContent = 'MẤT KẾT NỐI';
+    document.getElementById('kHealth').style.color = 'var(--red)';
+  } finally {
+    scheduleNext();
+  }
+}
+
+async function runPingTest() {
+  try {
+    await fetch('/api/v1/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: 'Pin 35%, VF e34, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy.',
+        session_id: 'dashboard_ping'
+      })
+    });
+    await loadStats();
+  } catch (e) {}
+}
+
+loadStats();
+</script>
+</body>
+</html>
+"""
+
+_load_recent_logs()
+
+
 class ChargePilotHandler(BaseHTTPRequestHandler):
     """HTTP Request Handler cho CHARGEPILOT API."""
 
@@ -652,16 +1196,24 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
         if path in (f"/download/{APK_FILENAME}", "/download/latest.apk"):
             self._serve_apk(head_only=True)
             return
-        ok_paths = ("/", "/health", "/api/release", "/api/v1/green-score/leaderboard")
+        ok_paths = ("/", "/health", "/dashboard", "/api/dashboard/stats", "/api/release", "/api/v1/green-score/leaderboard")
         self.send_response(200 if path in ok_paths else 404)
         self._send_cors_headers()
         self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self) -> None:
+        global APK_DOWNLOAD_COUNT
         path = urlparse(self.path).path
+        client_ip = self.client_address[0] if self.client_address else ""
         if path == "/":
             self._send_html(200, HTML_PAGE)
+            return
+        if path == "/dashboard":
+            self._send_html(200, DASHBOARD_HTML)
+            return
+        if path == "/api/dashboard/stats":
+            self._send_json(200, build_dashboard_stats())
             return
         if path == "/health":
             meta = _release_meta()
@@ -682,7 +1234,22 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
             self._send_json(200, _release_meta())
             return
         if path in (f"/download/{APK_FILENAME}", "/download/latest.apk"):
+            t0 = time.perf_counter()
+            apk_exists = os.path.isfile(_apk_path())
             self._serve_apk(head_only=False)
+            latency_ms = int(round((time.perf_counter() - t0) * 1000))
+            if apk_exists:
+                with STATE_LOCK:
+                    APK_DOWNLOAD_COUNT += 1
+            _record_request_log(
+                "GET",
+                path,
+                200 if apk_exists else 404,
+                latency_ms,
+                client_ip,
+                {"ok": apk_exists},
+                f"Tải APK ({APK_FILENAME})" if apk_exists else "APK chưa phát hành",
+            )
             return
         if path == "/api/v1/green-score/leaderboard":
             self._send_json(200, {"ok": True, "leaderboard": get_leaderboard()})
@@ -690,24 +1257,41 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
 
     def do_POST(self) -> None:
+        t0 = time.perf_counter()
         path = urlparse(self.path).path
+        client_ip = self.client_address[0] if self.client_address else ""
         payload = self._read_json()
         if payload is None:
-            self._send_json(400, {"ok": False, "error": "Body phải là JSON object hợp lệ."})
+            err_body = {"ok": False, "error": "Body phải là JSON object hợp lệ."}
+            self._send_json(400, err_body)
+            _record_request_log("POST", path, 400, int(round((time.perf_counter() - t0) * 1000)), client_ip, err_body)
             return
         if path in ("/api/v1/chat", "/api/chat", "/api/ask", "/api/optimize"):
             status, resp = handle_chat(payload)
             self._send_json(status, resp)
+            _record_request_log(
+                "POST",
+                path,
+                status,
+                int(round((time.perf_counter() - t0) * 1000)),
+                client_ip,
+                resp,
+                _payload_to_query(payload),
+            )
             return
         if path == "/api/v1/session/reset":
             status, resp = handle_session_reset(payload)
             self._send_json(status, resp)
+            _record_request_log("POST", path, status, int(round((time.perf_counter() - t0) * 1000)), client_ip, resp)
             return
         if path == "/api/v1/green-score/confirm":
             status, resp = handle_green_confirm(payload)
             self._send_json(status, resp)
+            _record_request_log("POST", path, status, int(round((time.perf_counter() - t0) * 1000)), client_ip, resp)
             return
-        self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
+        err_404 = {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"}
+        self._send_json(404, err_404)
+        _record_request_log("POST", path, 404, int(round((time.perf_counter() - t0) * 1000)), client_ip, err_404)
 
 
 def create_server(host: str = "0.0.0.0", port: int = 8000) -> ThreadingHTTPServer:

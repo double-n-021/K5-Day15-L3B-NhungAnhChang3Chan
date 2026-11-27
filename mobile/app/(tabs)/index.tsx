@@ -26,6 +26,9 @@ export default function HomeScreen() {
     itineraryStatus,
     proposedOptions,
     activeOptionIndex,
+    locationLabel,
+    gpsStatus,
+    refreshUserLocation,
     triggerVoiceAssistant,
   } = useChargePilotStore();
 
@@ -59,16 +62,23 @@ export default function HomeScreen() {
       >
         {/* Minimal 3D Top Header */}
         <View style={styles.topBar}>
-          <View style={styles.locationRow}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              void refreshUserLocation();
+            }}
+            style={styles.locationRow}
+            accessibilityLabel="Cập nhật vị trí GPS hiện tại"
+          >
             <Image
               source={ASSETS_3D.mapPinGold}
-              style={{ width: 22, height: 22 }}
+              style={{ width: 22, height: 22, flexShrink: 0 }}
               contentFit="contain"
             />
-            <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.textPrimary }]} numberOfLines={1}>
-              {effectiveInput.origin.shortName} · Hà Nội
+            <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
+              {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
             </Text>
-          </View>
+          </Pressable>
 
           <Pressable
             onPress={() => router.push('/(tabs)/vehicle')}
@@ -77,10 +87,10 @@ export default function HomeScreen() {
           >
             <Image
               source={ASSETS_3D.trophyGold}
-              style={{ width: 18, height: 18 }}
+              style={{ width: 18, height: 18, flexShrink: 0 }}
               contentFit="contain"
             />
-            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.warningAmber }]}>
+            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.warningAmber }]} numberOfLines={1}>
               {greenPoints} điểm
             </Text>
           </Pressable>
@@ -94,7 +104,7 @@ export default function HomeScreen() {
           >
             <Image
               source={ASSETS_3D.carIcon}
-              style={{ width: 20, height: 20 }}
+              style={{ width: 20, height: 20, flexShrink: 0 }}
               contentFit="contain"
             />
             <Text
@@ -103,8 +113,10 @@ export default function HomeScreen() {
                 {
                   color: vehicleId === 'vfe34' ? '#0B1017' : COLORS.textPrimary,
                   fontWeight: '700',
+                  flexShrink: 1,
                 },
               ]}
+              numberOfLines={1}
             >
               VinFast VF e34
             </Text>
@@ -116,7 +128,7 @@ export default function HomeScreen() {
           >
             <Image
               source={ASSETS_3D.scooterIcon}
-              style={{ width: 20, height: 20 }}
+              style={{ width: 20, height: 20, flexShrink: 0 }}
               contentFit="contain"
             />
             <Text
@@ -125,10 +137,12 @@ export default function HomeScreen() {
                 {
                   color: vehicleId === 'vinfast_evo200' ? '#0B1017' : COLORS.textPrimary,
                   fontWeight: '700',
+                  flexShrink: 1,
                 },
               ]}
+              numberOfLines={1}
             >
-              VinFast Evo200 2023
+              Evo200 2023
             </Text>
           </Pressable>
         </View>
@@ -138,7 +152,7 @@ export default function HomeScreen() {
           <Image
             source={vehicle.angles[0].source}
             style={styles.heroImage}
-            contentFit="cover"
+            contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
             transition={150}
           />
 
@@ -253,14 +267,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     paddingTop: SPACING.sm,
   },
   locationRow: {
+    flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   pointsPill: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -282,6 +300,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     minHeight: 38,
+    paddingHorizontal: 10,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.surface,
     borderWidth: 1,

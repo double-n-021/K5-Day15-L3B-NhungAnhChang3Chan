@@ -861,8 +861,9 @@ export function generateItineraryOptionsForRequest(params: {
   hanoiResult: RecommendationResult;
   vehicleId: VehicleId;
   weather: WeatherCondition;
+  originShortName?: string;
 }): ProposedItineraryOption[] {
-  const { parsed, hanoiResult, vehicleId, weather } = params;
+  const { parsed, hanoiResult, vehicleId, weather, originShortName } = params;
   if (!parsed.isComplete || parsed.batteryPct === null || !parsed.timeText || !parsed.destinationName) {
     return [];
   }
@@ -908,7 +909,7 @@ export function generateItineraryOptionsForRequest(params: {
         {
           id: `opt-${idx}-depart`,
           time: minutesToTime(startMin),
-          title: 'Xuất phát từ Láng Hạ',
+          title: `Xuất phát từ ${originShortName || 'vị trí hiện tại'}`,
           subtitle: `${selectedVehicle.name} · Pin ${startBatteryPct}%`,
           type: 'departure',
           batteryPct: startBatteryPct,

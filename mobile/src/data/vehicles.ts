@@ -44,7 +44,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
       {
         id: 'front34',
         label: 'Góc trước',
-        source: require('../../assets/vehicles/evo200-scooter-3d.webp'),
+        source: require('../../assets/vehicles/evo200-front34.jpg'),
       },
     ],
   },
