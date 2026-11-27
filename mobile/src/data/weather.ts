@@ -1,0 +1,48 @@
+import type { WeatherCondition } from '@/types';
+
+export const HANOI_WEATHER_STATES: Record<WeatherCondition['id'], WeatherCondition> = {
+  overcast_cool: {
+    id: 'overcast_cool',
+    city: 'Hà Nội',
+    temperatureC: 16,
+    conditionLabel: 'Trời lạnh nhiều mây',
+    windLabel: 'Gió Đông Bắc 14 km/h',
+    humidityPct: 78,
+    iconKey: 'partly-cloudy-day',
+    consumptionImpactPct: 12,
+    impactExplanation: 'Nhiệt độ 16°C và bật sưởi cabin làm tăng tiêu hao pin ~12% so với điều kiện tiêu chuẩn.',
+  },
+  cold_rain: {
+    id: 'cold_rain',
+    city: 'Hà Nội',
+    temperatureC: 12,
+    conditionLabel: 'Mưa rét · Độ ẩm cao',
+    windLabel: 'Gió Đông Bắc 21 km/h',
+    humidityPct: 91,
+    iconKey: 'rain',
+    consumptionImpactPct: 24,
+    impactExplanation: 'Mưa rét 12°C giảm hiệu suất hóa học pin LFP và tăng tải sưởi kính/cabin (+24% tiêu hao).',
+  },
+  mild_sun: {
+    id: 'mild_sun',
+    city: 'Hà Nội',
+    temperatureC: 24,
+    conditionLabel: 'Nắng nhẹ · Khô ráo',
+    windLabel: 'Gió nhẹ 8 km/h',
+    humidityPct: 62,
+    iconKey: 'clear-day',
+    consumptionImpactPct: 0,
+    impactExplanation: 'Nhiệt độ lý tưởng 24°C giúp pin đạt hiệu suất tối ưu, không phát sinh hao hụt.',
+  },
+  heavy_rain: {
+    id: 'heavy_rain',
+    city: 'Hà Nội',
+    temperatureC: 14,
+    conditionLabel: 'Mưa phùn nặng hạt',
+    windLabel: 'Gió 18 km/h',
+    humidityPct: 94,
+    iconKey: 'drizzle',
+    consumptionImpactPct: 20,
+    impactExplanation: 'Mặt đường ướt + điều hòa sưởi kính làm tiêu hao thêm ~20% năng lượng.',
+  },
+};

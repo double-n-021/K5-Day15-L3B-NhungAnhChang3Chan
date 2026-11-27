@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "ChargePilot AI",
+    "slug": "chargepilot-ai",
+    "scheme": "chargepilot",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B1017",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1017"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.chargepilot.ai",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "ChargePilot AI cần quyền Microphone để bạn nói trực tiếp yêu cầu lộ trình và tìm trạm sạc với trợ lý ảo.",
+        "NSSpeechRecognitionUsageDescription": "ChargePilot AI sử dụng nhận diện giọng nói tiếng Việt để chuyển lời nói thành lịch trình sạc thông minh."
+      }
+    },
+    "android": {
+      "package": "com.chargepilot.ai",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1017",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-status-bar",
+        {
+          "style": "light"
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      "expo-image",
+      "expo-font"
+    ]
+  }
+}

@@ -1,0 +1,263 @@
+import type { ImageSource } from 'expo-image';
+
+export type VehicleId = 'vfe34' | 'vinfast_evo200';
+
+export type VehicleCategory = 'car' | 'motorbike';
+
+export interface VehicleAngleAsset {
+  id: 'front34' | 'rear34';
+  label: string;
+  source: ImageSource | number;
+}
+
+export interface Vehicle {
+  id: VehicleId;
+  category: VehicleCategory;
+  name: string;
+  brand: string;
+  segment: string;
+  paintName: string;
+  usableBatteryKwh: number;
+  wltpRangeKm: number;
+  baseConsumptionKwhPer100Km: number;
+  maxDcPowerKw: number;
+  supportsBatterySwap?: boolean;
+  connectorType: 'CCS2' | 'Pin LFP / AC 220V';
+  fastChargeNote: string;
+  angles: VehicleAngleAsset[];
+}
+
+export type StationStatus = 'available' | 'busy' | 'maintenance' | 'unknown';
+export type BayStatus = 'available' | 'occupied' | 'maintenance' | 'unknown';
+
+export interface ChargingBay {
+  id: string;
+  code: string;
+  connector: 'CCS2 DC' | 'Type 2 AC';
+  powerKw: number;
+  status: BayStatus;
+  occupiedSinceMin?: number;
+  estimatedFreeInMin?: number;
+}
+
+export interface ChargingStation {
+  id: string;
+  name: string;
+  shortName: string;
+  operator: 'V-Green / VinFast';
+  address: string;
+  district: string;
+  coordinates: [number, number]; // [lng, lat]
+  coordinateSource: string;
+  isTelemetrySimulated: true;
+  status: StationStatus;
+  statusNote: string;
+  availableBays: number;
+  totalBays: number;
+  queueCount: number;
+  estimatedWaitMin: number;
+  maxPowerKw: number;
+  pricePerKwhVnd: number;
+  parkingNote: string;
+  bayLocationNote: string;
+  supportsMotorbike?: boolean;
+  supportsBatterySwap?: boolean;
+  bays: ChargingBay[];
+}
+
+export interface ManeuverStep {
+  instruction: string;
+  streetName: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  location: [number, number];
+  maneuverType: string;
+  modifier: string;
+}
+
+export interface RouteGeometry {
+  id: string;
+  fromId: string;
+  toId: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  coordinates: [number, number][];
+  steps: ManeuverStep[];
+}
+
+export type WeatherConditionId = 'overcast_cool' | 'cold_rain' | 'mild_sun' | 'heavy_rain';
+
+export interface WeatherCondition {
+  id: WeatherConditionId;
+  city: string;
+  temperatureC: number;
+  conditionLabel: string;
+  windLabel: string;
+  humidityPct: number;
+  iconKey: 'partly-cloudy-day' | 'rain' | 'overcast' | 'clear-day' | 'thermometer-colder' | 'drizzle';
+  consumptionImpactPct: number;
+  impactExplanation: string;
+}
+
+export type ChargingPreference = 'balanced' | 'fastest_time' | 'lowest_wait' | 'lowest_cost';
+
+export interface PlacePoint {
+  id: string;
+  name: string;
+  shortName: string;
+  address: string;
+  coordinates: [number, number];
+}
+
+export interface JourneyInput {
+  rawPrompt: string;
+  vehicleId: VehicleId;
+  batteryPct: number;
+  origin: PlacePoint;
+  primaryDestination: PlacePoint;
+  arrivalDeadline: string; // "HH:MM"
+  nextDestination: PlacePoint | null;
+  nextDepartureTime: string; // "HH:MM"
+  departureTime: string; // "HH:MM"
+  preference: ChargingPreference;
+}
+
+export interface StationEvaluation {
+  station: ChargingStation;
+  routeToStation: RouteGeometry | null;
+  routeToPrimary: RouteGeometry | null;
+  distanceToStationKm: number;
+  distanceToPrimaryKm: number;
+  driveToStationMin: number;
+  waitMin: number;
+  chargeMin: number;
+  driveToPrimaryMin: number;
+  arrivalBatteryPct: number;
+  targetDepartureBatteryPct: number;
+  primaryArrivalBatteryPct: number;
+  nextArrivalBatteryPct: number;
+  estimatedCostVnd: number;
+  estimatedArrivalTime: string;
+  scheduleSlackMin: number; // positive = early, negative = late
+  score: number;
+  safetyChecks: {
+    reachableWithBuffer: boolean;
+    stationOperational: boolean;
+    enoughForNextLeg: boolean;
+    meetsDeadline: boolean;
+  };
+  highlightReason: string;
+}
+
+export interface RejectedStation {
+  station: ChargingStation;
+  reasonTitle: string;
+  reasonDetail: string;
+  category: 'maintenance' | 'unreachable' | 'unknown_risk' | 'severe_delay';
+}
+
+export type JourneyStageType = 'departure' | 'driving' | 'waiting' | 'charging' | 'appointment' | 'destination';
+
+export interface JourneyStage {
+  id: string;
+  time: string;
+  title: string;
+  subtitle: string;
+  type: JourneyStageType;
+  batteryPct: number;
+  durationMin?: number;
+  status: 'safe' | 'warning' | 'critical';
+}
+
+export interface RecommendationResult {
+  hasSafeRoute: boolean;
+  recommended: StationEvaluation | null;
+  alternatives: StationEvaluation[];
+  rejected: RejectedStation[];
+  whyBetterThanNearest: string;
+  criticalAlertTitle?: string;
+  criticalAlertMessage?: string;
+  timeline: JourneyStage[];
+  summary: {
+    totalTripDistanceKm: number;
+    effectiveConsumptionKwhPer100Km: number;
+    estimatedRangeKm: number;
+    targetArrivePrimaryTime: string;
+    targetArriveNextTime: string;
+  };
+}
+
+export type WhatIfScenarioId =
+  | 'station_maintenance'
+  | 'queue_surge'
+  | 'cold_weather'
+  | 'critical_battery'
+  | 'heavy_traffic'
+  | 'schedule_shifted';
+
+export interface WhatIfScenarioMeta {
+  id: WhatIfScenarioId;
+  title: string;
+  subtitle: string;
+  severity: 'warning' | 'critical';
+  impactTag: string;
+}
+
+export interface DemoStep {
+  stepNumber: number;
+  title: string;
+  narrative: string;
+  targetRoute: string;
+  actionTag: string;
+}
+
+export type MissingInfoField = 'destination' | 'battery' | 'time';
+
+export interface ParsedNaturalRequest {
+  rawText: string;
+  destinationName: string | null;
+  destinationScope: 'hanoi' | 'intercity' | null;
+  hanoiPlaceId?: string;
+  nextDestinationName?: string | null;
+  batteryPct: number | null;
+  timeText: string | null;
+  missingFields: MissingInfoField[];
+  isComplete: boolean;
+}
+
+export type ItineraryDecisionStatus = 'none' | 'pending' | 'accepted' | 'declined';
+
+export type MascotMood = 'idle' | 'listening' | 'thinking' | 'happy' | 'warning';
+
+export interface OffPeakReward {
+  points: number;
+  label: string;
+  reason: string;
+  isSolarNoon: boolean;
+  discountVnd: number;
+}
+
+export interface ProposedItineraryOption {
+  id: string;
+  optionIndex: number;
+  totalOptions: number;
+  strategyLabel: string;
+  destinationName: string;
+  stationName: string;
+  stationAddress: string;
+  distanceKm: number;
+  driveMin: number;
+  waitMin: number;
+  chargeMin: number;
+  arrivalBatteryPct: number;
+  departureBatteryPct: number;
+  estimatedCostVnd: number;
+  etaText: string;
+  scheduleNote: string;
+  whyThisOption: string;
+  mascotSpeech: string;
+  reward: OffPeakReward;
+  isIntercitySimulated: boolean;
+  hanoiStationId?: string;
+  timeline: JourneyStage[];
+}

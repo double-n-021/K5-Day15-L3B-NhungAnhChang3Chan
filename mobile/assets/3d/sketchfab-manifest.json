@@ -1,0 +1,42 @@
+{
+  "byd_atto3": {
+    "uid": "f7ef899186d445d48e4781ddfc84fddc",
+    "name": "2024 BYD Atto 3",
+    "author": "Ddiaz Design",
+    "license": "CC Attribution-NonCommercial-ShareAlike",
+    "embedUrl": "https://sketchfab.com/models/f7ef899186d445d48e4781ddfc84fddc/embed?autostart=1&transparent=1&ui_infos=0&ui_stop=0&ui_inspector=0&ui_watermark_link=0",
+    "file": "byd-atto3-3d.webp"
+  },
+  "selex_camel": {
+    "uid": "6af67a41415543248fe63c1f3a97580c",
+    "name": "gogoro",
+    "author": "Monje",
+    "license": "Editorial",
+    "embedUrl": "https://sketchfab.com/models/6af67a41415543248fe63c1f3a97580c/embed?autostart=1&transparent=1&ui_infos=0&ui_stop=0&ui_inspector=0&ui_watermark_link=0",
+    "file": "selex-swap-scooter-3d.webp"
+  },
+  "datbike_quantum": {
+    "uid": "8ef8749ade9c4f7d87eb22711fde19cb",
+    "name": "YAMAHA EC-05 ABS electric scooter",
+    "author": "patrix",
+    "license": "Sketchfab Public Embed",
+    "embedUrl": "https://sketchfab.com/models/8ef8749ade9c4f7d87eb22711fde19cb/embed?autostart=1&transparent=1&ui_infos=0&ui_stop=0&ui_inspector=0&ui_watermark_link=0",
+    "file": "datbike-quantum-3d.webp"
+  },
+  "vinfast_evo200": {
+    "uid": "b9be37e77e5642f3bc4863901b5efa5a",
+    "name": "Vespa Electricca Scooter",
+    "author": "Mellora",
+    "license": "Standard",
+    "embedUrl": "https://sketchfab.com/models/b9be37e77e5642f3bc4863901b5efa5a/embed?autostart=1&transparent=1&ui_infos=0&ui_stop=0&ui_inspector=0&ui_watermark_link=0",
+    "file": "evo200-scooter-3d.webp"
+  },
+  "ev_charger_station": {
+    "uid": "1930fe67b1d84a3a9dbcf4cb50c58a8f",
+    "name": "New energy vehicle charging station - 新能源车充电站",
+    "author": "MrdT",
+    "license": "CC Attribution",
+    "embedUrl": "https://sketchfab.com/models/1930fe67b1d84a3a9dbcf4cb50c58a8f/embed?autostart=1&transparent=1&ui_infos=0&ui_stop=0&ui_inspector=0&ui_watermark_link=0",
+    "file": "ev-charger-station-3d.webp"
+  }
+}
