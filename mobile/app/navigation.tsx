@@ -43,17 +43,52 @@ export default function ActiveNavigationScreen() {
     effectiveStations,
     effectiveInput,
     selectedStationId,
+    proposedOptions,
+    activeOptionIndex,
+    itineraryStatus,
     recommendation,
     mapStyleMode,
     toggleScenario,
     activeScenarios,
   } = useChargePilotStore();
 
-  const targetStation =
-    effectiveStations.find((s) => s.id === selectedStationId) ??
-    effectiveStations.find((s) => s.id === recommendation.recommended?.station.id) ??
-    recommendation.recommended?.station ??
-    effectiveStations[0];
+  const acceptedOption =
+    itineraryStatus === 'accepted' ? proposedOptions[activeOptionIndex] ?? null : null;
+
+  const targetStation = useMemo(() => {
+    const matched =
+      effectiveStations.find((s) => s.id === selectedStationId) ??
+      (acceptedOption?.apiStationId
+        ? effectiveStations.find((s) => s.id === acceptedOption.apiStationId)
+        : undefined) ??
+      (acceptedOption?.hanoiStationId
+        ? effectiveStations.find((s) => s.id === acceptedOption.hanoiStationId)
+        : undefined);
+    if (matched) return matched;
+
+    // Guarantee we NEVER silently fall back to a different station if user accepted a live API option
+    if (
+      acceptedOption &&
+      acceptedOption.stationLat != null &&
+      acceptedOption.stationLon != null
+    ) {
+      const base = effectiveStations[0];
+      return {
+        ...base,
+        id: acceptedOption.apiStationId || acceptedOption.hanoiStationId || acceptedOption.id,
+        name: acceptedOption.stationName,
+        shortName: acceptedOption.stationName,
+        address: acceptedOption.stationAddress,
+        coordinates: [acceptedOption.stationLon, acceptedOption.stationLat] as [number, number],
+      };
+    }
+
+    return (
+      effectiveStations.find((s) => s.id === recommendation.recommended?.station.id) ??
+      recommendation.recommended?.station ??
+      effectiveStations[0]
+    );
+  }, [effectiveStations, selectedStationId, acceptedOption, recommendation.recommended]);
 
   const cachedRoute = useMemo(() => {
     if (!targetStation) return null;

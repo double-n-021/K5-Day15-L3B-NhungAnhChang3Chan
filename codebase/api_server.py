@@ -605,6 +605,7 @@ def _compute_structured_metadata(effective_text: str, reply_text: str, session_i
         "reply_text": reply_text,
         "tts_summary": tts_summary,
         "vehicle": v,
+        "origin": origin,
         "battery": {
             "current_pct": pct,
             "target_pct": req["target_pct"],
