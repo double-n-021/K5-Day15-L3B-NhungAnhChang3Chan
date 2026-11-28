@@ -1267,6 +1267,7 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 "apk_available": meta.get("available", False),
                 "apk_meta": meta,
                 "mappo_status": mappo_policy.ENGINE.status(),
+                "osrm_live_routing": tools.USE_LIVE_OSRM,
             })
             return
         if path == "/api/release":
@@ -1445,9 +1446,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=default_port, help=f"Cổng lắng nghe (mặc định {default_port})")
     args = parser.parse_args()
 
+    tools.USE_LIVE_OSRM = os.environ.get("USE_LIVE_OSRM", "1").strip().lower() not in ("0", "false", "no")
     server = create_server(args.host, args.port)
     print(f"CHARGEPILOT API v{CONTRACT_VERSION} đang chạy tại http://{args.host}:{args.port} "
-          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER}")
+          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER} · osrm_live={tools.USE_LIVE_OSRM}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
