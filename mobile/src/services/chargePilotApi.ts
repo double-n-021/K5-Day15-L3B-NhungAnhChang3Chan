@@ -15,6 +15,7 @@ import type {
   ProposedItineraryOption,
   StationStatus,
   VehicleId,
+  WeatherCondition,
 } from '@/types';
 
 export const DEFAULT_VPS_BASE_URL = 'https://maintaining-podcast-down-coding.trycloudflare.com';
@@ -110,6 +111,80 @@ async function fetchJson<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export interface ApiLiveWeatherResponse {
+  ok: boolean;
+  city: string;
+  temp_c: number | null;
+  rain_pct: number | null;
+  solar_wm2: number | null;
+  solar_best_window?: string | null;
+  drain_factor: number;
+  notes?: string[];
+  source?: string;
+}
+
+export async function fetchLiveWeather(baseUrl: string): Promise<ApiLiveWeatherResponse> {
+  return requestJson<ApiLiveWeatherResponse>(`${normalizeBaseUrl(baseUrl)}/api/v1/weather`, {
+    method: 'GET',
+    timeoutMs: 6000,
+  });
+}
+
+export function buildWeatherConditionFromApi(params: {
+  tempC: number | null;
+  rainPct?: number | null;
+  drainFactor?: number | null;
+  solarWm2?: number | null;
+}): WeatherCondition {
+  const temp = params.tempC !== null && Number.isFinite(params.tempC) ? Math.round(params.tempC) : 22;
+  const rain = params.rainPct !== null && params.rainPct !== undefined ? Math.round(params.rainPct) : 0;
+  const drain = params.drainFactor && params.drainFactor >= 1 ? params.drainFactor : 1.0;
+  const impactPct = Math.max(0, Math.round((drain - 1.0) * 100));
+
+  let id: WeatherCondition['id'] = 'mild_sun';
+  let conditionLabel = 'Mát mẻ · Khô ráo (Open-Meteo)';
+  let iconKey: WeatherCondition['iconKey'] = 'clear-day';
+
+  if (rain >= 60) {
+    id = temp <= 16 ? 'cold_rain' : 'heavy_rain';
+    conditionLabel = temp <= 16 ? `Mưa rét · Mưa ${rain}%` : `Có mưa · Xác suất ${rain}%`;
+    iconKey = 'rain';
+  } else if (temp <= 15) {
+    id = 'overcast_cool';
+    conditionLabel = 'Trời rét · Tự động Open-Meteo';
+    iconKey = 'partly-cloudy-day';
+  } else if (temp >= 35) {
+    id = 'mild_sun';
+    conditionLabel = 'Nắng nóng · Tự động Open-Meteo';
+    iconKey = 'clear-day';
+  } else if (params.solarWm2 && params.solarWm2 >= 300) {
+    id = 'mild_sun';
+    conditionLabel = `Nắng đẹp · ${Math.round(params.solarWm2)} W/m²`;
+    iconKey = 'clear-day';
+  } else {
+    id = 'overcast_cool';
+    conditionLabel = 'Nhiều mây · Tự động Open-Meteo';
+    iconKey = 'partly-cloudy-day';
+  }
+
+  const impactExplanation =
+    impactPct > 0
+      ? `Thời tiết Hà Nội ${temp}°C${rain >= 50 ? `, mưa ${rain}%` : ''} làm tăng tiêu hao pin ước tính +${impactPct}% (tự động từ Open-Meteo).`
+      : `Nhiệt độ Hà Nội ${temp}°C thuận lợi, không phát sinh hao hụt pin thêm (tự động từ Open-Meteo).`;
+
+  return {
+    id,
+    city: 'Hà Nội',
+    temperatureC: temp,
+    conditionLabel,
+    windLabel: rain >= 50 ? `Xác suất mưa ${rain}%` : 'Tự động · Open-Meteo',
+    humidityPct: Math.min(98, Math.max(55, 60 + Math.round(rain * 0.35))),
+    iconKey,
+    consumptionImpactPct: impactPct,
+    impactExplanation,
+  };
 }
 
 export async function checkApiHealth(baseUrl: string): Promise<ApiHealthResponse> {

@@ -206,8 +206,10 @@ export function buildDirectRoute(
       originCoord[1] + (destCoord[1] - originCoord[1]) * t,
     ]);
   }
-  const distanceMeters = Math.max(50, Math.round(haversineDistanceMeters(originCoord, destCoord)));
-  const durationSeconds = Math.max(60, Math.round(distanceMeters / 7.8));
+  const straightMeters = haversineDistanceMeters(originCoord, destCoord);
+  // Apply Hanoi urban road-winding factor (1.35x) so offline fallback matches real roads much closer than straight-line distance
+  const distanceMeters = Math.max(50, Math.round(straightMeters * 1.35));
+  const durationSeconds = Math.max(60, Math.round(distanceMeters / 7.2));
   const label = destinationName?.trim() || 'trạm sạc mục tiêu';
 
   return {
