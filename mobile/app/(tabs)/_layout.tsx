@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Car, Gauge, MapPin, Mic } from 'lucide-react-native';
+import { Gauge, KeyRound, MapPin, Mic } from 'lucide-react-native';
 import { COLORS } from '@/theme/tokens';
 import { FONT_FAMILY } from '@/theme/typography';
 
@@ -57,7 +57,7 @@ export default function TabsLayout() {
         name="vehicle"
         options={{
           title: 'Xe của tôi',
-          tabBarIcon: ({ color, size }) => <Car size={size - 2} color={color} />,
+          tabBarIcon: ({ color, size }) => <KeyRound size={size - 2} color={color} />,
         }}
       />
     </Tabs>

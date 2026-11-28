@@ -77,11 +77,6 @@ export default function VehicleScreen() {
           <Text style={[TYPOGRAPHY.screenTitle, { color: COLORS.textPrimary }]}>
             Xe của tôi
           </Text>
-          <Image
-            source={vehicle.category === 'motorbike' ? ASSETS_3D.scooterIcon : ASSETS_3D.carIcon}
-            style={{ width: 28, height: 28 }}
-            contentFit="contain"
-          />
         </View>
 
         {/* Strict 2-Vehicle Switcher */}
