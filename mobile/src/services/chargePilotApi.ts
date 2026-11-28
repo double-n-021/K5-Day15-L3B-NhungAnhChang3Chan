@@ -159,6 +159,7 @@ export async function sendConverseMessage(
         body: JSON.stringify({
           session_id: payload.session_id,
           message,
+          ...(payload.device_context ? { device_context: payload.device_context } : {}),
         }),
       },
       25000

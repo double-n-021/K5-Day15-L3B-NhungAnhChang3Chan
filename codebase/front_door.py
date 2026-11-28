@@ -476,7 +476,80 @@ def _run_handoff(
     }
 
 
-def converse(session_id: str, message: str, answer_fn=None) -> dict:
+def _resolve_device_context(device_context: dict | None) -> dict:
+    """Resolve optional mobile device_context (GPS landmark, default vehicle, local time, weekday)."""
+    if not device_context or not isinstance(device_context, dict):
+        return {}
+
+    resolved: dict = {}
+
+    default_vehicle = str(device_context.get("default_vehicle") or "").strip()
+    if default_vehicle:
+        parsed_v = tools.parse_request(f"Xe {default_vehicle}").get("vehicle") or {}
+        if parsed_v.get("model") is not None or parsed_v.get("vehicle_type") == "xe_may":
+            resolved["vehicle"] = dict(parsed_v)
+        else:
+            resolved["vehicle"] = {"model": default_vehicle, "vehicle_type": "o_to", "known": False}
+
+    local_time = str(device_context.get("local_time") or "").strip()
+    m_time = re.fullmatch(r"(\d{1,2}):(\d{2})", local_time)
+    if m_time:
+        hh, mm = int(m_time.group(1)), int(m_time.group(2))
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            resolved["now_h"] = hh + mm / 60.0
+
+    wd = device_context.get("weekday")
+    if isinstance(wd, int) and not isinstance(wd, bool) and 0 <= wd <= 6:
+        resolved["weekday"] = wd
+
+    lat, lon = device_context.get("lat"), device_context.get("lon")
+    if (
+        isinstance(lat, (int, float))
+        and not isinstance(lat, bool)
+        and isinstance(lon, (int, float))
+        and not isinstance(lon, bool)
+    ):
+        landmarks = tools._load("hanoi_landmarks.json") or []
+        nearest = None
+        best_d = 9999.0
+        for lm in landmarks:
+            d = tools.road_km(float(lat), float(lon), lm["lat"], lm["lon"])
+            if d < best_d:
+                best_d = d
+                nearest = lm
+        if nearest is not None and best_d <= 5.0:
+            resolved["origin"] = {
+                "name": nearest["name"],
+                "lat": nearest["lat"],
+                "lon": nearest["lon"],
+                "via": "gps",
+            }
+
+    return resolved
+
+
+def _merge_with_device_context(slots: dict, dev_ctx: dict) -> dict:
+    """Fill missing slots with device_context defaults without mutating stored session slots."""
+    effective = _clone_slots(slots)
+    if not dev_ctx:
+        return effective
+    if effective.get("origin") is None and not effective.get("place_phrase") and dev_ctx.get("origin"):
+        effective["origin"] = dict(dev_ctx["origin"])
+    if effective.get("vehicle") is None and dev_ctx.get("vehicle"):
+        effective["vehicle"] = dict(dev_ctx["vehicle"])
+    if effective.get("now_h") is None and dev_ctx.get("now_h") is not None:
+        effective["now_h"] = float(dev_ctx["now_h"])
+    if effective.get("weekday") is None and dev_ctx.get("weekday") is not None:
+        effective["weekday"] = int(dev_ctx["weekday"])
+    return effective
+
+
+def converse(
+    session_id: str,
+    message: str,
+    answer_fn=None,
+    device_context: dict | None = None,
+) -> dict:
     """Process one conversational turn via code-first routing before `agent.answer()`."""
     clean_msg = (message or "").strip()
     req = tools.parse_request(clean_msg)
@@ -494,7 +567,7 @@ def converse(session_id: str, message: str, answer_fn=None) -> dict:
             "turns": int(existing["turns"]),
         }
 
-    # Rule 1: Refusal flags always go straight to agent.py with raw message (no slot merge, no intro).
+    # Rule 1: Refusal flags always go straight to agent.py with raw message (no slot merge, no intro, no device_context).
     if l1["booking_or_payment"] or l1["otp"] or l1["injection"] or l1["out_of_scope_place"]:
         return _run_handoff(
             session=session,
@@ -514,12 +587,16 @@ def converse(session_id: str, message: str, answer_fn=None) -> dict:
     ) or bool(req.get("mentioned_station"))
     has_current_signal = bool(delta) or vague_hit or has_charging_flag
 
-    # Trap #1 protection: only merge slots explicitly found in this turn.
+    # Trap #1 protection: only merge slots explicitly found in this turn into session memory.
     session["slots"].update(delta)
+
+    # Resolve device_context ONLY for handoff checks/serialization; never pollute chat/greetings or session slots.
+    dev_ctx = _resolve_device_context(device_context)
+    effective_slots = _merge_with_device_context(session["slots"], dev_ctx)
 
     # Rule 2: < 15% battery in this turn triggers rescue handoff immediately (even after prior "no" — Trap #2).
     if req.get("current_pct") is not None and int(req["current_pct"]) < tools.RESCUE_PCT:
-        handoff_query = build_handoff_request(session["slots"], clean_msg, req)
+        handoff_query = build_handoff_request(effective_slots, clean_msg, req)
         return _run_handoff(
             session=session,
             session_id=session_id,
@@ -530,9 +607,9 @@ def converse(session_id: str, message: str, answer_fn=None) -> dict:
             answer_fn=answer_fn,
         )
 
-    # Rule 3: Current charging signal + merged battery % & location -> hand off immediately.
-    if has_current_signal and session["slots"].get("current_pct") is not None and session["slots"].get("origin") is not None:
-        handoff_query = build_handoff_request(session["slots"], clean_msg, req)
+    # Rule 3: Current charging signal + merged (spoken or GPS) battery % & location -> hand off immediately.
+    if has_current_signal and effective_slots.get("current_pct") is not None and effective_slots.get("origin") is not None:
+        handoff_query = build_handoff_request(effective_slots, clean_msg, req)
         return _run_handoff(
             session=session,
             session_id=session_id,
@@ -547,7 +624,7 @@ def converse(session_id: str, message: str, answer_fn=None) -> dict:
     declined = False
     if session["pending_offer"] and not has_current_signal:
         if YES_RE.search(clean_msg):
-            handoff_query = build_handoff_request(session["slots"], clean_msg, req)
+            handoff_query = build_handoff_request(effective_slots, clean_msg, req)
             return _run_handoff(
                 session=session,
                 session_id=session_id,
