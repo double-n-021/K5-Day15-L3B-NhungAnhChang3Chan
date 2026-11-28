@@ -40,6 +40,7 @@ if CODEBASE_DIR not in sys.path:
 
 import agent  # noqa: E402
 import ai  # noqa: E402
+import front_door  # noqa: E402
 import guardrails  # noqa: E402
 import mappo_policy  # noqa: E402
 import tools  # noqa: E402
@@ -574,14 +575,77 @@ def handle_chat(payload: dict) -> tuple[int, dict]:
     return 200, response
 
 
+def handle_converse(payload: dict) -> tuple[int, dict]:
+    """Xử lý POST /api/v1/converse (lớp hội thoại demo-only trước agent.py)."""
+    raw_msg = payload.get("message") if isinstance(payload.get("message"), str) else payload.get("text")
+    message = raw_msg.strip() if isinstance(raw_msg, str) else ""
+    if not message:
+        return 400, {"ok": False, "error": "Thiếu nội dung 'message'."}
+
+    session_id = str(payload.get("session_id") or "").strip() or ("sess_" + uuid.uuid4().hex[:12])
+    agent_trace: dict = {"summary": {}}
+
+    def run_agent(handoff_query: str) -> dict:
+        with TRACE_LOCK:
+            tracing.begin("converse-" + session_id[:8])
+            try:
+                res = agent.answer(handoff_query)
+            except Exception:
+                tracing.end()
+                raise
+            summary, _events = tracing.end()
+            agent_trace["summary"] = summary
+            return res
+
+    t0 = time.perf_counter()
+    try:
+        fd_res = front_door.converse(session_id, message, answer_fn=run_agent)
+    except Exception as exc:
+        return 502, {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    latency_s = time.perf_counter() - t0
+
+    ag_sum = agent_trace.get("summary") or {}
+    ag_in = int(ag_sum.get("tokens_in", 0) or 0)
+    ag_out = int(ag_sum.get("tokens_out", 0) or 0)
+    fd_in = int(fd_res.get("tokens_in", 0) or 0)
+    fd_out = int(fd_res.get("tokens_out", 0) or 0)
+
+    return 200, {
+        "ok": True,
+        "contract_version": CONTRACT_VERSION,
+        "session_id": fd_res["session_id"],
+        "action": fd_res["action"],
+        "handoff_reason": fd_res["handoff_reason"],
+        "reply": fd_res["reply"],
+        "output": fd_res["output"],
+        "intro": fd_res["intro"],
+        "agent_output": fd_res["agent_output"],
+        "handoff_query": fd_res["handoff_query"],
+        "slots": fd_res["slots"],
+        "meta": {
+            "front_door_model": fd_res["front_door_model"],
+            "front_door_tokens_in": fd_in,
+            "front_door_tokens_out": fd_out,
+            "agent_models": ag_sum.get("models") or [],
+            "agent_tokens_in": ag_in,
+            "agent_tokens_out": ag_out,
+            "tokens_in": fd_in + ag_in,
+            "tokens_out": fd_out + ag_out,
+            "tool_calls": int(ag_sum.get("tool_calls", 0) or 0),
+            "latency_ms": int(round(latency_s * 1000)),
+        },
+    }
+
+
 def handle_session_reset(payload: dict) -> tuple[int, dict]:
     """Xử lý POST /api/v1/session/reset để xoá ngữ cảnh hội thoại của session_id."""
     session_id = str(payload.get("session_id") or "").strip()
     if not session_id:
         return 400, {"ok": False, "error": "Thiếu 'session_id'."}
     with STATE_LOCK:
-        cleared = SESSIONS.pop(session_id, None) is not None
-    return 200, {"ok": True, "session_id": session_id, "cleared": cleared}
+        chat_cleared = SESSIONS.pop(session_id, None) is not None
+    fd_cleared = front_door.reset_session(session_id)
+    return 200, {"ok": True, "session_id": session_id, "cleared": chat_cleared or fd_cleared}
 
 
 def handle_green_confirm(payload: dict) -> tuple[int, dict]:
@@ -1316,6 +1380,23 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 client_ip,
                 resp,
                 _payload_to_query(payload),
+            )
+            return
+        if path == "/api/v1/converse":
+            status, resp = handle_converse(payload)
+            self._send_json(status, resp)
+            log_query = (
+                (resp.get("handoff_query") if isinstance(resp, dict) else None)
+                or _payload_to_query(payload)
+            )
+            _record_request_log(
+                "POST",
+                path,
+                status,
+                int(round((time.perf_counter() - t0) * 1000)),
+                client_ip,
+                resp,
+                log_query,
             )
             return
         if path == "/api/v1/session/reset":
