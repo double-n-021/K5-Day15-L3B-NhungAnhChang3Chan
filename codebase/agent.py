@@ -17,7 +17,8 @@ from ai import call_model
 import guardrails
 import mappo_policy
 from tools import (DEFAULT_TARGET_PCT, RESCUE_PCT, STATUS_VI, check_answer, estimate_green_reward, find_stations,
-                   fmt_h, fmt_km, get_weather, parse_request, plan_charge_window, road_km, safe_range, _all_stations)
+                   fmt_h, fmt_km, get_weather, parse_request, plan_charge_window, road_km, safe_range, trip_road_km,
+                   _all_stations)
 from tracing import note
 
 SYSTEM = """Bạn là trợ lý tìm trạm sạc xe điện ở Hà Nội. Bạn nhận BẢN NHÁP do hệ thống tính từ dữ liệu thật.
@@ -192,7 +193,7 @@ def build_draft(text):
     trip_ok = None
     dest = req["destination"]
     if dest and origin and rng.get("safe_km") is not None:
-        d = road_km(origin["lat"], origin["lon"], dest["lat"], dest["lon"])
+        d = trip_road_km(origin["lat"], origin["lon"], dest["lat"], dest["lon"])
         trip_ok = d <= rng["safe_km"]
         if trip_ok:
             lines.append("Pin hiện tại đủ cho chuyến tới %s (~%s km đường)." % (dest["name"], fmt_km(d)))
