@@ -37,6 +37,7 @@ Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự 
 |---|---|---|---|---|---|---|
 | 1 | `run-1@20261127-193233` | `claude-haiku-5-5` | Workflow cố định 6 tool (`codebase/agent.py`, `tools.py`) + Claude viết lại bản nháp (`effort=low`) + `check_answer` fallback | 28/29 | 96,6% | Đạt chuẩn tổng (trượt 1 câu lỗi mạng B13) |
 | 2 | `run-2@20261127-221406` | `claude-haiku-5-5` | Thêm retry mạng (`ai.py`), siết `SYSTEM` + `check_answer` (`agent.py`, `tools.py`), thêm gợi ý sạc xanh Open-Meteo + `estimate_green_reward` (`Green Score`) | 29/29 | 100% | Đạt chuẩn |
+| 3 | `run-3@20261128-134206` | `claude-haiku-5-5` | Chạy lại sau CP4 trên code hiện tại: MAPPO (`3fd9d90`), đồng bộ data trạm thêm trạm OSM (`4971eec`), xếp trạm theo km đường OSRM (`fb98be7`). Chấm bởi AI, chưa có người chấm thứ hai | 27/29 | 93,1% | Đạt chuẩn tổng (an_toan_tram 100%, ma_tram_co_that 100%); trượt B07, B09 vì trạm OSM mới gần hơn chiếm hạng 1 |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
 
