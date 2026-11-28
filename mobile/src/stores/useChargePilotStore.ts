@@ -239,19 +239,19 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   driverName: 'Tài xế ChargePilot',
   confirmedTokens: [],
 
-  greenPoints: 120,
+  greenPoints: 65,
   creditedOptionIds: [],
   rewardHistory: [
     {
       id: 'init-noon',
       title: 'Sạc khung trưa nắng 12:15 tại Metropolis',
-      points: 80,
+      points: 45,
       time: 'Hôm qua',
     },
     {
       id: 'init-offpeak',
       title: 'Sạc trạm vắng tại Vincom Bà Triệu',
-      points: 40,
+      points: 20,
       time: '3 ngày trước',
     },
   ],

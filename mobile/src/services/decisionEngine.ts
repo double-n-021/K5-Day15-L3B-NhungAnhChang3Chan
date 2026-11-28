@@ -702,18 +702,20 @@ export function calculateOffPeakReward(
   const mins = timeToMinutes(chargeStartTime);
   if (mins >= 11 * 60 && mins <= 14 * 60) {
     return {
-      points: 80,
-      label: '+80 điểm Sạc Xanh Trưa Nắng',
+      // Matches backend estimate_green_reward max at noon: off-peak +20, solar +15, QĐ 2892 station +10.
+      points: 45,
+      label: '+45 điểm Sạc Xanh Trưa Nắng',
       reason:
-        'Khung giờ trưa nắng (11:00–14:00) rất ít người ra trạm — bạn giúp giãn tải lưới điện và nhận x2 điểm thưởng.',
+        'Khung giờ trưa nắng (11:00–14:00) rất ít người ra trạm — bạn giúp giãn tải lưới điện và nhận điểm thưởng cao nhất.',
       isSolarNoon: true,
       discountVnd: 8000,
     };
   }
   if (mins >= 22 * 60 || mins < 6 * 60) {
     return {
-      points: 50,
-      label: '+50 điểm Đêm Thấp Điểm',
+      // Backend: off-peak +20, night +10.
+      points: 30,
+      label: '+30 điểm Đêm Thấp Điểm',
       reason: 'Sạc khung giờ đêm thấp điểm (22:00–06:00) giúp cân bằng phụ tải lưới điện.',
       isSolarNoon: false,
       discountVnd: 5000,
@@ -721,8 +723,9 @@ export function calculateOffPeakReward(
   }
   if (stationOccupancyRatio <= 0.45) {
     return {
-      points: 30,
-      label: '+30 điểm Trạm Vắng',
+      // Backend: off-peak +20.
+      points: 20,
+      label: '+20 điểm Trạm Vắng',
       reason: 'Trạm đang rất thoáng xe — sạc ngay giúp phân bổ lưu lượng đều hơn.',
       isSolarNoon: false,
       discountVnd: 3000,
@@ -732,7 +735,7 @@ export function calculateOffPeakReward(
     points: 0,
     label: 'Khung giờ cao điểm',
     reason:
-      'Khung giờ đông xe — nếu tiện bạn có thể dời sang giờ trưa nắng 11:00–14:00 để nhận +80 điểm.',
+      'Khung giờ đông xe — nếu tiện bạn có thể dời sang giờ trưa nắng 11:00–14:00 để nhận đến +45 điểm.',
     isSolarNoon: false,
     discountVnd: 0,
   };

@@ -34,6 +34,7 @@ import {
 import { MascotAssistant } from '@/components/mascot/MascotAssistant';
 import { MarkdownText, stripMarkdown } from '@/components/shared/MarkdownText';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { formatVnd } from '@/services/decisionEngine';
 import {
   cancelVietnameseSpeech,
@@ -64,10 +65,15 @@ const VOICE_SAMPLES = [
   },
   {
     id: 'guardrail-da-nang',
-    label: '“Pin 40%, đi Đà Nẵng sạc ở đâu?” (Test ngoài phạm vi)',
+    label: '“Pin 40%, đi Đà Nẵng sạc ở đâu?” (Ngoài khu vực Hà Nội)',
     prompt: 'Pin 40%, đi Đà Nẵng sạc ở đâu?',
   },
 ];
+
+// API etaText is the charge window ("11:42–12:30") or "Sạc ngay"; offline mode gives an arrival time.
+function isChargeWindowText(text: string): boolean {
+  return /\d{1,2}:\d{2}\s*[–-]/.test(text) || text === 'Sạc ngay';
+}
 
 const QUICK_FILL_CHIPS: Record<
   MissingInfoField,
@@ -89,7 +95,7 @@ const QUICK_FILL_CHIPS: Record<
   },
   time: {
     chips: [
-      { label: 'Trưa nắng 12h (+80đ)', append: ' lúc trưa nắng 12h' },
+      { label: 'Trưa nắng 12h (+45đ)', append: ' lúc trưa nắng 12h' },
       { label: '8h sáng', append: ' lúc 8h sáng' },
       { label: 'Trước 14h30', append: ', 14h30 phải có mặt' },
     ],
@@ -486,11 +492,11 @@ export default function JourneyScreen() {
 
             <View style={styles.pointsBadge}>
               <Image
-                source={ASSETS_3D.trophyGold}
+                source={CUSTOM_ICONS.greenCharge}
                 style={{ width: 16, height: 16, flexShrink: 0 }}
                 contentFit="contain"
               />
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]} numberOfLines={1}>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]} numberOfLines={1}>
                 {greenPoints}đ
               </Text>
             </View>
@@ -872,7 +878,7 @@ export default function JourneyScreen() {
                   ]}
                 >
                   <Image
-                    source={activeOption.reward.isSolarNoon ? ASSETS_3D.sunGold : ASSETS_3D.coin}
+                    source={activeOption.reward.isSolarNoon ? CUSTOM_ICONS.greenCharge : ASSETS_3D.coin}
                     style={{ width: 24, height: 24 }}
                     contentFit="contain"
                   />
@@ -900,11 +906,13 @@ export default function JourneyScreen() {
                 </View>
 
                 <View style={styles.stationHeroRow}>
-                  <Image
-                    source={ASSETS_3D.evChargerStation}
-                    style={styles.stationThumb3D}
-                    contentFit="cover"
-                  />
+                  <View style={styles.stationThumb3D}>
+                    <Image
+                      source={CUSTOM_ICONS.evStation}
+                      style={{ width: 44, height: 44 }}
+                      contentFit="contain"
+                    />
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary }]} numberOfLines={2}>
                       {activeOption.stationName}
@@ -917,7 +925,12 @@ export default function JourneyScreen() {
 
                 <View style={styles.metricsRow}>
                   <View style={styles.metricCell}>
-                    <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}>
+                    <Text
+                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.72}
+                    >
                       {activeOption.distanceKm} km
                     </Text>
                     <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
@@ -925,7 +938,12 @@ export default function JourneyScreen() {
                     </Text>
                   </View>
                   <View style={styles.metricCell}>
-                    <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]}>
+                    <Text
+                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.72}
+                    >
                       {activeOption.chargeMin}p
                     </Text>
                     <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
@@ -933,11 +951,16 @@ export default function JourneyScreen() {
                     </Text>
                   </View>
                   <View style={styles.metricCell}>
-                    <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}>
+                    <Text
+                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.72}
+                    >
                       {activeOption.etaText}
                     </Text>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-                      Đến nơi
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]} numberOfLines={1}>
+                      {isChargeWindowText(activeOption.etaText) ? 'Khung sạc' : 'Đến nơi'}
                     </Text>
                   </View>
                 </View>
@@ -1252,9 +1275,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: COLORS.warningAmberDim,
+    backgroundColor: COLORS.energyGreenDim,
     borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
+    borderColor: COLORS.energyGreenBorder,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: RADIUS.pill,
@@ -1354,9 +1377,9 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.energyGreenDim,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metricsRow: {
     flexDirection: 'row',

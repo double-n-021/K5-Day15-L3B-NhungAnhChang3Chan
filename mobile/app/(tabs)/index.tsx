@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
 import { isBatteryFresh, useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '@/theme/tokens';
@@ -18,6 +19,13 @@ const BATTERY_CHIPS = [10, 20, 30, 50, 70, 90];
 // Max Green Score at midday per codebase/tools.py estimate_green_reward:
 // off-peak +20, solar ≥300 W/m² +15, QĐ 2892 time-of-use station +10.
 const NOON_MAX_POINTS = 45;
+
+// One-tap example questions filling the lower half of Home (label shown, prompt sent).
+const QUICK_ASKS = [
+  { label: 'Đi Hồ Gươm lúc 15h', prompt: 'Đi Hồ Gươm lúc 15h' },
+  { label: 'Sạc trưa nắng nhận điểm xanh', prompt: 'Sạc trưa nắng ở đâu để nhận điểm Sạc Xanh?' },
+  { label: 'Trạm gần nhất còn trống', prompt: 'Trạm sạc gần nhất còn trống' },
+];
 
 function formatHHMM(ts: number): string {
   const d = new Date(ts);
@@ -91,6 +99,14 @@ export default function HomeScreen() {
     router.push('/(tabs)/journey');
   };
 
+  const handleQuickAsk = (prompt: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    queuePrompt(prompt);
+    router.push('/(tabs)/journey');
+  };
+
+  const shortVehicle = vehicleId === 'vfe34' ? 'VF e34' : 'Evo200';
+
   const handleSubmitText = () => {
     const trimmed = promptText.trim();
     if (!trimmed) return;
@@ -128,8 +144,8 @@ export default function HomeScreen() {
             style={styles.pointsPill}
             accessibilityLabel="Điểm Sạc Xanh hiện có"
           >
-            <Image source={ASSETS_3D.trophyGold} style={styles.icon18} contentFit="contain" />
-            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.warningAmber }]} numberOfLines={1}>
+            <Image source={CUSTOM_ICONS.greenCharge} style={styles.icon18} contentFit="contain" />
+            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.energyGreen }]} numberOfLines={1}>
               {greenPoints} điểm
             </Text>
           </Pressable>
@@ -148,11 +164,6 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                 >
-                  <Image
-                    source={id === 'vfe34' ? ASSETS_3D.carIcon : ASSETS_3D.scooterIcon}
-                    style={styles.icon20}
-                    contentFit="contain"
-                  />
                   <Text
                     style={[
                       TYPOGRAPHY.caption,
@@ -174,6 +185,7 @@ export default function HomeScreen() {
               contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
               transition={150}
             />
+            {/* Name gets the full row width so "VinFast Evo200 2023" is never cut. */}
             <View style={{ flex: 1 }}>
               <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]} numberOfLines={1}>
                 {vehicle.name}
@@ -183,45 +195,50 @@ export default function HomeScreen() {
                 {batteryFresh ? ` · ~${recommendation.summary.estimatedRangeKm} km` : ''}
               </Text>
             </View>
-
-            <View style={styles.batteryReadout}>
-              {batteryFresh && (
-                <Pressable
-                  onPress={() => handleStepBattery(-5)}
-                  hitSlop={8}
-                  style={styles.stepBtn}
-                  accessibilityLabel="Giảm 5% pin"
-                >
-                  <Text style={styles.stepTxt}>−</Text>
-                </Pressable>
-              )}
-              <Text style={[TYPOGRAPHY.metricLarge, { color: batteryColor }]}>
-                {batteryFresh ? `${batteryPct}%` : '--%'}
-              </Text>
-              {batteryFresh && (
-                <Pressable
-                  onPress={() => handleStepBattery(5)}
-                  hitSlop={8}
-                  style={styles.stepBtn}
-                  accessibilityLabel="Tăng 5% pin"
-                >
-                  <Text style={styles.stepTxt}>+</Text>
-                </Pressable>
-              )}
-            </View>
           </View>
 
           <View style={[styles.chipsWrap, needBattery && styles.chipsWrapAlert]}>
-            <Text
-              style={[TYPOGRAPHY.micro, { color: needBattery ? COLORS.criticalRed : COLORS.textSecondary }]}
-              numberOfLines={1}
-            >
-              {needBattery
-                ? 'Chọn mức pin trước để mình tìm trạm nhé'
-                : batteryFresh && batteryConfirmedAt !== null
-                  ? `Pin hiện tại · báo lúc ${formatHHMM(batteryConfirmedAt)}, AI tự dùng mức này 30 phút`
-                  : 'Pin hiện tại còn khoảng bao nhiêu?'}
-            </Text>
+            <View style={styles.batteryHeader}>
+              <Text
+                style={[
+                  TYPOGRAPHY.micro,
+                  { color: needBattery ? COLORS.criticalRed : COLORS.textSecondary, flex: 1 },
+                ]}
+                numberOfLines={2}
+              >
+                {needBattery
+                  ? 'Chọn mức pin trước để mình tìm trạm nhé'
+                  : batteryFresh && batteryConfirmedAt !== null
+                    ? `Pin hiện tại · báo lúc ${formatHHMM(batteryConfirmedAt)} · AI dùng 30 phút`
+                    : 'Pin hiện tại còn khoảng bao nhiêu?'}
+              </Text>
+
+              <View style={styles.batteryReadout}>
+                {batteryFresh && (
+                  <Pressable
+                    onPress={() => handleStepBattery(-5)}
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                    accessibilityLabel="Giảm 5% pin"
+                  >
+                    <Text style={styles.stepTxt}>−</Text>
+                  </Pressable>
+                )}
+                <Text style={[TYPOGRAPHY.metricLarge, { color: batteryColor }]}>
+                  {batteryFresh ? `${batteryPct}%` : '--%'}
+                </Text>
+                {batteryFresh && (
+                  <Pressable
+                    onPress={() => handleStepBattery(5)}
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                    accessibilityLabel="Tăng 5% pin"
+                  >
+                    <Text style={styles.stepTxt}>+</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
             <View style={styles.chipsRow}>
               {BATTERY_CHIPS.map((pct) => {
                 const active = batteryFresh && batteryPct === pct;
@@ -251,7 +268,7 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Bấm Mic để nói với trợ lý AI"
           >
-            <Image source={ASSETS_3D.micGold} style={{ width: 38, height: 38 }} contentFit="contain" />
+            <Image source={CUSTOM_ICONS.micVoice} style={{ width: 36, height: 36 }} contentFit="contain" />
             <Text style={[TYPOGRAPHY.micro, { color: '#0B1017', fontWeight: '700' }]}>Nói</Text>
           </Pressable>
 
@@ -261,13 +278,15 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Tìm trạm sạc gần nhất ngay"
           >
-            <Image source={ASSETS_3D.evChargerStation} style={{ width: 40, height: 40 }} contentFit="contain" />
+            <View style={styles.nearestIcon}>
+              <Image source={CUSTOM_ICONS.evStation} style={{ width: 34, height: 34 }} contentFit="contain" />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]} numberOfLines={1}>
                 Tìm trạm gần nhất
               </Text>
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]} numberOfLines={1}>
-                {batteryFresh ? `GPS + ${vehicle.name} + pin ${batteryPct}%` : 'Chọn mức pin ở trên trước'}
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]} numberOfLines={2}>
+                {batteryFresh ? `GPS · ${shortVehicle} · pin ${batteryPct}%` : 'Chọn mức pin ở trên trước'}
               </Text>
             </View>
           </Pressable>
@@ -312,12 +331,32 @@ export default function HomeScreen() {
           style={styles.noonStrip}
           accessibilityLabel="Xem điểm Sạc Xanh"
         >
-          <Image source={ASSETS_3D.sunGold} style={{ width: 24, height: 24 }} contentFit="contain" />
+          <Image source={CUSTOM_ICONS.greenCharge} style={{ width: 24, height: 24 }} contentFit="contain" />
           <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={2}>
             Sạc trưa nắng 11:00–14:00, ngoài cao điểm: đến{' '}
             <Text style={{ color: COLORS.energyGreen, fontWeight: '700' }}>+{NOON_MAX_POINTS} điểm Sạc Xanh</Text>
           </Text>
         </Pressable>
+
+        {/* Quick asks: one tap sends an example question to the assistant */}
+        <View style={styles.quickWrap}>
+          <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>Hỏi nhanh</Text>
+          <View style={styles.quickRow}>
+            {QUICK_ASKS.map((q) => (
+              <Pressable
+                key={q.label}
+                onPress={() => handleQuickAsk(q.prompt)}
+                style={({ pressed }) => [styles.quickChip, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Hỏi nhanh: ${q.label}`}
+              >
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary }]} numberOfLines={1}>
+                  {q.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -355,9 +394,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: COLORS.warningAmberDim,
+    backgroundColor: COLORS.energyGreenDim,
     borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
+    borderColor: COLORS.energyGreenBorder,
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: RADIUS.pill,
@@ -398,20 +437,26 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   vehicleThumb: {
-    width: 76,
-    height: 52,
+    width: 66,
+    height: 46,
     borderRadius: RADIUS.sm,
     backgroundColor: '#0B1017',
+  },
+  batteryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   batteryReadout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    flexShrink: 0,
   },
   stepBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.surfaceElevated,
@@ -477,6 +522,31 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.energyGreenBorder,
+  },
+  nearestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.energyGreenDim,
+  },
+  quickWrap: {
+    gap: 6,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   pressed: {
     transform: [{ scale: 0.97 }],

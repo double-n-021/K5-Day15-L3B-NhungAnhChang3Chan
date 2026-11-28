@@ -25,6 +25,7 @@ import { HanoiMapView, type MapRouteLayerItem } from '@/components/map/HanoiMapV
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
 import { formatVnd } from '@/services/decisionEngine';
 import { getCachedRoute } from '@/services/routeService';
@@ -228,7 +229,7 @@ export default function SmartMapScreen() {
             [
               { id: 'all', label: 'Tất cả' },
               { id: 'available', label: 'Đang trống' },
-              { id: 'noon_bonus', label: '+80đ Trưa nắng' },
+              { id: 'noon_bonus', label: '+45đ Trưa nắng' },
             ] as const
           ).map((f) => {
             const active = filter === f.id;
@@ -309,12 +310,12 @@ export default function SmartMapScreen() {
                 {selectedStation.status === 'available' && selectedStation.maxPowerKw >= 120 && (
                   <View style={styles.noonBonusPill}>
                     <Image
-                      source={ASSETS_3D.sunGold}
+                      source={CUSTOM_ICONS.greenCharge}
                       style={{ width: 12, height: 12 }}
                       contentFit="contain"
                     />
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
-                      +80đ Trưa nắng
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]}>
+                      +45đ Trưa nắng
                     </Text>
                   </View>
                 )}
@@ -395,6 +396,12 @@ export default function SmartMapScreen() {
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.sheetHandle}
         enableOverDrag={false}
+        // Expanded sheet must sit above the map overlays and below the status bar (QA P0).
+        topInset={insets.top + 8}
+        containerStyle={{ zIndex: 30, elevation: 30 }}
+        onChange={(idx) => {
+          if (idx >= 1) setStationPopupVisible(false);
+        }}
       >
         <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
           {selectedStation && (
@@ -402,9 +409,9 @@ export default function SmartMapScreen() {
               <View style={styles.selectedHeader}>
                 <View style={styles.stationThumbWrap}>
                   <Image
-                    source={ASSETS_3D.evChargerStation}
+                    source={CUSTOM_ICONS.evStation}
                     style={styles.stationThumb}
-                    contentFit="cover"
+                    contentFit="contain"
                   />
                 </View>
 
@@ -421,12 +428,12 @@ export default function SmartMapScreen() {
                     {selectedStation.status === 'available' && selectedStation.maxPowerKw >= 120 && (
                       <View style={styles.noonBonusPill}>
                         <Image
-                          source={ASSETS_3D.sunGold}
+                          source={CUSTOM_ICONS.greenCharge}
                           style={{ width: 13, height: 13 }}
                           contentFit="contain"
                         />
-                        <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
-                          +80đ Trưa nắng
+                        <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]}>
+                          +45đ Trưa nắng
                         </Text>
                       </View>
                     )}
@@ -530,11 +537,13 @@ export default function SmartMapScreen() {
                 onPress={() => handleSelectStation(st.id)}
                 style={[styles.stationRow, isSel && styles.stationRowSelected]}
               >
-                <Image
-                  source={ASSETS_3D.evChargerStation}
-                  style={styles.rowThumb3D}
-                  contentFit="cover"
-                />
+                <View style={styles.rowThumb3D}>
+                  <Image
+                    source={CUSTOM_ICONS.evStation}
+                    style={{ width: 32, height: 32 }}
+                    contentFit="contain"
+                  />
+                </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.stationRowTitle}>
                     <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.textPrimary, flex: 1 }]} numberOfLines={1}>
@@ -753,13 +762,13 @@ const styles = StyleSheet.create({
     height: 66,
     borderRadius: RADIUS.md,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.energyGreenDim,
   },
   stationThumb: {
-    width: '100%',
-    height: '100%',
+    width: 44,
+    height: 44,
   },
   tagRow: {
     flexDirection: 'row',
@@ -779,8 +788,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.warningAmberDim,
-    borderColor: COLORS.warningAmberBorder,
+    backgroundColor: COLORS.energyGreenDim,
+    borderColor: COLORS.energyGreenBorder,
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -839,7 +848,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.energyGreenDim,
   },
   stationRowSelected: {
     borderColor: COLORS.energyGreen,

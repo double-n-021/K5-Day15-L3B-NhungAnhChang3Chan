@@ -120,6 +120,19 @@ export async function checkApiHealth(baseUrl: string): Promise<ApiHealthResponse
   return fetchJson<ApiHealthResponse>(`${base}/health`, { method: 'GET' }, 8000);
 }
 
+/**
+ * Short map label without the internal station ID. When the name is generic once "Trạm sạc"
+ * is stripped (e.g. many stations are just "VinFast"), append the first part of the address
+ * so neighbouring pins can be told apart.
+ */
+function distinctShortName(name: string, address: string | null): string {
+  const short = name.replace(/^Trạm sạc\s*/i, '').trim();
+  const generic = short.length < 12 || /^(vinfast|v-green|vgreen|ev)$/i.test(short);
+  if (!generic || !address) return short;
+  const street = address.split(',')[0].trim();
+  return street && !short.toLowerCase().includes(street.toLowerCase()) ? `${short} · ${street}` : short;
+}
+
 export async function sendChatMessage(
   baseUrl: string,
   payload: ApiChatRequest
@@ -271,7 +284,7 @@ export function mapApiStationsToChargingStations(resp: ApiChatResponse): Chargin
             : mappedStatus === 'maintenance'
               ? 'maintenance'
               : 'unknown';
-      const short = st.name.replace(/^Trạm sạc\s*/i, '').trim();
+      const short = distinctShortName(st.name, st.address);
 
       return {
         id: st.id,
@@ -390,7 +403,7 @@ export function mapApiResponseToProposedOptions(
       {
         id: `api-${st.id}-arrive`,
         time: `+${driveMin}p`,
-        title: `Tới [${st.id}] ${st.name}`,
+        title: `Tới ${st.name}`,
         subtitle: `${st.road_km.toFixed(1)} km · ${st.status_label}${st.power_kw ? ` · ${st.power_kw} kW` : ''}`,
         type: 'driving',
         batteryPct: arrivalPct,
@@ -417,7 +430,7 @@ export function mapApiResponseToProposedOptions(
       totalOptions,
       strategyLabel: `Hạng #${st.rank} · ${st.status_label}`,
       destinationName: 'Hà Nội',
-      stationName: `[${st.id}] ${st.name}`,
+      stationName: st.name,
       stationAddress: st.address || `Cách ${st.road_km.toFixed(1)} km`,
       distanceKm: Number(st.road_km.toFixed(1)),
       driveMin,

@@ -21,12 +21,19 @@ import {
 } from 'lucide-react-native';
 import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
 import { HANOI_WEATHER_STATES } from '@/data/weather';
 import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
 import type { WeatherConditionId } from '@/types';
+
+// Short switcher labels so both buttons stay one line and equal height (full name is shown on the card).
+const SWITCH_LABELS = {
+  vfe34: { title: 'VinFast VF e34', connector: 'CCS2' },
+  vinfast_evo200: { title: 'Evo200 2023', connector: 'LFP / AC' },
+} as const;
 
 export default function VehicleScreen() {
   const insets = useSafeAreaInsets();
@@ -99,15 +106,16 @@ export default function VehicleScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  {v.name}
+                  {SWITCH_LABELS[id].title}
                 </Text>
                 <Text
                   style={[
                     TYPOGRAPHY.micro,
                     { color: active ? '#0B1017' : COLORS.textSecondary },
                   ]}
+                  numberOfLines={1}
                 >
-                  {v.usableBatteryKwh} kWh · {v.connectorType}
+                  {v.usableBatteryKwh} kWh · {SWITCH_LABELS[id].connector}
                 </Text>
               </Pressable>
             );
@@ -306,7 +314,7 @@ export default function VehicleScreen() {
           <View style={styles.greenHeaderRow}>
             <View style={styles.greenTitleLeft}>
               <Image
-                source={ASSETS_3D.trophyGold}
+                source={CUSTOM_ICONS.greenCharge}
                 style={{ width: 22, height: 22, flexShrink: 0 }}
                 contentFit="contain"
               />
@@ -325,7 +333,7 @@ export default function VehicleScreen() {
               >
                 <RefreshCw size={14} color={COLORS.textSecondary} />
               </Pressable>
-              <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.warningAmber }]} numberOfLines={1}>
+              <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]} numberOfLines={1}>
                 {greenPoints}đ
               </Text>
             </View>
@@ -346,7 +354,7 @@ export default function VehicleScreen() {
             <View key={item.id} style={styles.rowBetween}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 }}>
                 <Image
-                  source={ASSETS_3D.medalGold}
+                  source={CUSTOM_ICONS.greenCharge}
                   style={{ width: 16, height: 16, flexShrink: 0 }}
                   contentFit="contain"
                 />

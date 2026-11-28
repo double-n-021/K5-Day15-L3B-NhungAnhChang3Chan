@@ -26,7 +26,7 @@ interface MascotAssistantProps {
 }
 
 const MOOD_ACCENT: Record<MascotMood, string> = {
-  idle: COLORS.border,
+  idle: COLORS.textSecondary, // readable badge on dark bubble (was COLORS.border, near invisible)
   listening: COLORS.energyGreen,
   thinking: COLORS.navBlue,
   happy: COLORS.energyGreen,
