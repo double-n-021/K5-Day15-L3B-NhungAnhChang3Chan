@@ -10,6 +10,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { stripMarkdown } from '@/components/shared/MarkdownText';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
 import type { MascotMood } from '@/types';
@@ -151,7 +152,7 @@ export function MascotAssistant({
           ]}
           numberOfLines={compact ? 3 : undefined}
         >
-          {speech}
+          {stripMarkdown(speech)}
         </Text>
       </View>
     </View>

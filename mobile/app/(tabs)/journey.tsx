@@ -32,6 +32,7 @@ import {
   XCircle,
 } from 'lucide-react-native';
 import { MascotAssistant } from '@/components/mascot/MascotAssistant';
+import { MarkdownText, stripMarkdown } from '@/components/shared/MarkdownText';
 import { ASSETS_3D } from '@/data/assets3d';
 import { formatVnd } from '@/services/decisionEngine';
 import {
@@ -376,7 +377,7 @@ export default function JourneyScreen() {
           : `ĐỀ XUẤT ${activeOption.optionIndex + 1}/${activeOption.totalOptions}`
         : 'TRỢ LÝ LIVE AI';
     }
-    mascotSpeech = lastApiResponse.tts_summary || lastApiResponse.reply_text;
+    mascotSpeech = stripMarkdown(lastApiResponse.tts_summary || lastApiResponse.reply_text);
   } else if (parsedRequest && !parsedRequest.isComplete) {
     mascotMood = 'warning';
     mascotBadge = 'CẦN BỔ SUNG THÔNG TIN';
@@ -582,9 +583,7 @@ export default function JourneyScreen() {
                     {INTENT_LABELS[lastApiResponse.intent_state] || 'Tư vấn sạc'}
                   </Text>
                 </View>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, lineHeight: 20 }]}>
-                  {lastApiResponse.reply_text}
-                </Text>
+                <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
                 {lastApiResponse.guardrails.excluded_note && (
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
                     Lưu ý an toàn: {lastApiResponse.guardrails.excluded_note}
