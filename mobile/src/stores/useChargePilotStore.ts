@@ -86,6 +86,12 @@ interface ChargePilotState {
   rewardHistory: { id: string; title: string; points: number; time: string }[];
   voiceDrawerTrigger: number;
 
+  // Battery % the driver explicitly reported (quick chips on Home or a % in a message).
+  // null = never reported: the 18% default is demo data and must never be sent to the AI.
+  batteryConfirmedAt: number | null;
+  // Prompt queued from Home, submitted by the Journey screen so it reuses its thinking/fallback UI.
+  pendingPrompt: string | null;
+
   // Live GPS Origin state
   gpsStatus: 'idle' | 'loading' | 'ready' | 'denied' | 'error';
   locationLabel: string;
@@ -100,6 +106,9 @@ interface ChargePilotState {
   setUserOrigin: (place: PlacePoint, displayLabel?: string) => void;
   refreshUserLocation: () => Promise<void>;
   setBatteryPct: (pct: number) => void;
+  confirmBatteryPct: (pct: number) => void;
+  queuePrompt: (prompt: string) => void;
+  consumePendingPrompt: () => string | null;
   setArrivalDeadline: (hhmm: string) => void;
   shiftArrivalDeadline: (deltaMin: number) => void;
   setPreference: (pref: ChargingPreference) => void;
@@ -194,6 +203,14 @@ function recompute(
 
 const initialComputed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, [], 'metropolis');
 
+// A reported battery % is reused for this long, then the driver is asked again (pin tụt khi xe chạy).
+export const BATTERY_CONFIRM_TTL_MS = 30 * 60 * 1000;
+const PCT_IN_TEXT_RE = /\d{1,3}\s*%/;
+
+export function isBatteryFresh(confirmedAt: number | null): boolean {
+  return confirmedAt !== null && Date.now() - confirmedAt <= BATTERY_CONFIRM_TTL_MS;
+}
+
 export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   vehicleId: DEFAULT_INPUT.vehicleId,
   journeyInput: DEFAULT_INPUT,
@@ -239,6 +256,8 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     },
   ],
   voiceDrawerTrigger: 0,
+  batteryConfirmedAt: null,
+  pendingPrompt: null,
 
   gpsStatus: 'idle',
   locationLabel: 'Đang định vị...',
@@ -292,6 +311,22 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
       journeyInput: nextInput,
       ...computed,
     });
+  },
+
+  confirmBatteryPct: (pct) => {
+    get().setBatteryPct(pct);
+    set({ batteryConfirmedAt: Date.now() });
+  },
+
+  queuePrompt: (prompt) => {
+    const trimmed = prompt.trim();
+    if (trimmed) set({ pendingPrompt: trimmed });
+  },
+
+  consumePendingPrompt: () => {
+    const p = get().pendingPrompt;
+    if (p !== null) set({ pendingPrompt: null });
+    return p;
   },
 
   setArrivalDeadline: (hhmm) => {
@@ -453,9 +488,17 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     const [originLon, originLat] = effectiveInput.origin.coordinates;
     const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
 
+    // Attach the driver's own recent battery report when this message has no %, so they never
+    // have to repeat it. Plain text keeps it working on both /converse and the /chat fallback.
+    const mentionsPct = PCT_IN_TEXT_RE.test(trimmed);
+    const messageToSend =
+      !mentionsPct && isBatteryFresh(get().batteryConfirmedAt)
+        ? `${trimmed.replace(/[.\s]+$/, '')}. Pin còn ${get().journeyInput.batteryPct}%.`
+        : trimmed;
+
     try {
       const resp = await sendConverseMessage(apiBaseUrl, {
-        message: trimmed,
+        message: messageToSend,
         session_id: apiSessionId,
         device_context: {
           lat: originLat,
@@ -504,6 +547,10 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         apiSourceMode: 'live',
         apiModelName: resp.guardrails?.model || get().apiModelName,
         lastApiResponse: resp,
+        // The driver typed a % themselves: treat it as a fresh report.
+        ...(mentionsPct && resp.battery?.current_pct !== null && resp.battery?.current_pct !== undefined
+          ? { batteryConfirmedAt: Date.now() }
+          : {}),
         apiSessionId: resp.session_id || apiSessionId,
         apiLoading: false,
         apiError: null,

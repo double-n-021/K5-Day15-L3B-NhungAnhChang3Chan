@@ -132,6 +132,8 @@ export default function JourneyScreen() {
     itineraryStatus,
     greenPoints,
     voiceDrawerTrigger,
+    pendingPrompt,
+    consumePendingPrompt,
     setVehicleId,
     sendPromptToApi,
     confirmGreenToken,
@@ -320,6 +322,16 @@ export default function JourneyScreen() {
       startRealVoiceListening().catch(() => {});
     }
   }, [voiceDrawerTrigger, startRealVoiceListening]);
+
+  // Prompts queued from Home (text box / "Tìm trạm gần nhất") run through the same submit path.
+  useEffect(() => {
+    if (!pendingPrompt || isThinking || apiLoading) return;
+    const queued = consumePendingPrompt();
+    if (queued) {
+      setMode('chat');
+      submitNaturalText(queued).catch(() => {});
+    }
+  }, [pendingPrompt, isThinking, apiLoading, consumePendingPrompt, submitNaturalText]);
 
   useEffect(() => {
     return () => {
