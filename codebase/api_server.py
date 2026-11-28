@@ -40,6 +40,7 @@ if CODEBASE_DIR not in sys.path:
 
 import agent  # noqa: E402
 import ai  # noqa: E402
+import front_door  # noqa: E402
 import guardrails  # noqa: E402
 import mappo_policy  # noqa: E402
 import tools  # noqa: E402
@@ -77,6 +78,18 @@ HTML_PAGE = """<!DOCTYPE html>
   .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
   .btn { display:inline-block; background:var(--jade); color:#fff; text-decoration:none; border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:14px; cursor:pointer; }
   .btn-ghost { background:#0f172a; color:#36e6a3; border:1px solid #1e293b; }
+  .btn-sm { padding:7px 12px; font-size:12.5px; border-radius:8px; }
+  .btn-chip { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; padding:6px 10px; font-size:12px; border-radius:999px; cursor:pointer; font-weight:600; }
+  .chat-log { background:#f8fafc; border:1px solid var(--line); border-radius:12px; padding:12px; height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; margin:10px 0; }
+  .msg { max-width:86%; padding:10px 12px; border-radius:12px; font-size:13.5px; line-height:1.45; white-space:pre-wrap; }
+  .msg-u { align-self:flex-end; background:#0f766e; color:#fff; }
+  .msg-a { align-self:flex-start; background:#fff; border:1px solid var(--line); color:var(--ink); }
+  .badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; margin-bottom:4px; background:#e2e8f0; color:#334155; }
+  .badge-handoff { background:#d1fae5; color:#065f46; }
+  .badge-partial { background:#fef3c7; color:#92400e; }
+  .slots-bar { font-size:12px; color:var(--muted); background:#f1f5f9; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
+  .input-row { display:flex; gap:8px; }
+  .input-row input { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; }
   textarea { width:100%; min-height:84px; padding:12px; border:1px solid var(--line); border-radius:10px; font:inherit; margin:10px 0; }
   pre { background:#0f172a; color:#e2e8f0; padding:14px; border-radius:10px; overflow:auto; white-space:pre-wrap; font-size:13px; }
   .muted { color:var(--muted); font-size:13px; }
@@ -99,6 +112,29 @@ HTML_PAGE = """<!DOCTYPE html>
     <a class="btn" href="/download/ChargePilot-AI.apk">Tải ChargePilot-AI.apk</a>
   </div>
   <div class="card">
+    <div class="row">
+      <strong>Demo Hội thoại Front-Door (POST /api/v1/converse)</strong>
+      <div>
+        <span class="muted" id="fdSess"></span>
+        <button class="btn btn-ghost btn-sm" onclick="resetConverse()">Phiên mới</button>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-start;margin-top:8px;gap:6px;">
+      <button class="btn-chip" onclick="sendPreset('Chào bạn, Green Score tính sao?')">Chào &amp; Green Score</button>
+      <button class="btn-chip" onclick="sendPreset('Xe VF e34, đi lúc 18h, sạc lên 90%')">1. VF e34 · 18h · 90%</button>
+      <button class="btn-chip" onclick="sendPreset('Mình đang ở Cầu Giấy')">2. Ở Cầu Giấy</button>
+      <button class="btn-chip" onclick="sendPreset('Không, chưa cần')">3. Từ chối</button>
+      <button class="btn-chip" onclick="sendPreset('Pin còn 12% rồi')">4. Cứu pin 12%</button>
+      <button class="btn-chip" onclick="sendPreset('Đặt cọc giữ trụ giúp mình')">Test từ chối đặt cọc</button>
+    </div>
+    <div class="chat-log" id="fdLog"></div>
+    <div class="slots-bar" id="fdSlots">Bộ nhớ phiên: chưa có thông số (xe, % pin, vị trí, giờ).</div>
+    <div class="input-row">
+      <input id="fdInput" placeholder="Nhập tin nhắn (vd: Chào bạn / Pin 12% / VF e34 ở Cầu Giấy...)" onkeydown="if(event.key==='Enter')sendConverse()" />
+      <button class="btn" onclick="sendConverse()">Gửi</button>
+    </div>
+  </div>
+  <div class="card">
     <strong>Dùng thử nhanh (POST /api/v1/chat)</strong>
     <textarea id="q">Pin 35%, VF e34, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.</textarea>
     <button class="btn" onclick="ask()">Gửi trợ lý</button>
@@ -106,11 +142,76 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 </div>
 <script>
+let fdSessionId = 'web_' + Math.random().toString(16).slice(2, 10);
+document.getElementById('fdSess').textContent = 'Session: ' + fdSessionId + ' ';
 fetch('/api/release').then(r => r.json()).then(m => {
   document.getElementById('apkStatus').textContent = m.available
     ? (m.filename + ' (' + m.version + ', ' + m.size_mb + ' MB)')
     : 'Chưa có file APK phát hành trong releases/';
 }).catch(() => {});
+function appendMsg(role, text, badgeText, badgeCls) {
+  const log = document.getElementById('fdLog');
+  const box = document.createElement('div');
+  box.className = 'msg ' + (role === 'user' ? 'msg-u' : 'msg-a');
+  if (badgeText) {
+    const b = document.createElement('div');
+    b.className = 'badge ' + (badgeCls || '');
+    b.textContent = badgeText;
+    box.appendChild(b);
+    box.appendChild(document.createElement('br'));
+  }
+  box.appendChild(document.createTextNode(text));
+  log.appendChild(box);
+  log.scrollTop = log.scrollHeight;
+}
+function renderSlots(slots) {
+  if (!slots) return;
+  const parts = [];
+  if (slots.vehicle && slots.vehicle.model) parts.push('Xe: ' + slots.vehicle.model);
+  else if (slots.vehicle && slots.vehicle.vehicle_type === 'xe_may') parts.push('Xe: Xe máy điện');
+  if (slots.current_pct !== null && slots.current_pct !== undefined) parts.push('Pin: ' + slots.current_pct + '%');
+  if (slots.target_pct !== null && slots.target_pct !== undefined) parts.push('Mục tiêu: ' + slots.target_pct + '%');
+  if (slots.origin) parts.push('Ở: ' + slots.origin);
+  if (slots.destination) parts.push('Đi: ' + slots.destination);
+  if (slots.now_h) parts.push('Giờ: ' + slots.now_h);
+  document.getElementById('fdSlots').textContent = 'Bộ nhớ phiên: ' + (parts.length ? parts.join(' · ') : 'chưa có thông số.');
+}
+function sendPreset(txt) {
+  document.getElementById('fdInput').value = txt;
+  sendConverse();
+}
+async function sendConverse() {
+  const inp = document.getElementById('fdInput');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+  appendMsg('user', msg);
+  try {
+    const r = await fetch('/api/v1/converse', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: fdSessionId, message: msg})
+    });
+    const d = await r.json();
+    const label = d.action === 'handoff' ? ('handoff · ' + (d.handoff_reason || d.intent_state)) : (d.action || 'chat');
+    const cls = d.action === 'handoff' ? 'badge-handoff' : (d.action === 'partial_prompt' ? 'badge-partial' : '');
+    appendMsg('assistant', d.reply || d.error || 'Không có phản hồi', label, cls);
+    renderSlots(d.slots);
+  } catch (e) {
+    appendMsg('assistant', 'Lỗi kết nối: ' + e.message, 'error');
+  }
+}
+async function resetConverse() {
+  await fetch('/api/v1/session/reset', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_id: fdSessionId})
+  }).catch(() => {});
+  fdSessionId = 'web_' + Math.random().toString(16).slice(2, 10);
+  document.getElementById('fdSess').textContent = 'Session: ' + fdSessionId + ' ';
+  document.getElementById('fdLog').innerHTML = '';
+  document.getElementById('fdSlots').textContent = 'Bộ nhớ phiên: đã đặt lại phiên mới.';
+}
 async function ask() {
   const out = document.getElementById('out');
   out.textContent = 'Đang xử lý...';
@@ -574,14 +675,186 @@ def handle_chat(payload: dict) -> tuple[int, dict]:
     return 200, response
 
 
+def handle_converse(payload: dict) -> tuple[int, dict]:
+    """Xử lý POST /api/v1/converse (lớp hội thoại demo-only trước agent.py)."""
+    raw_msg = payload.get("message") if isinstance(payload.get("message"), str) else payload.get("text")
+    message = raw_msg.strip() if isinstance(raw_msg, str) else ""
+    if not message:
+        return 400, {"ok": False, "error": "Thiếu nội dung 'message'."}
+
+    session_id = str(payload.get("session_id") or "").strip() or ("sess_" + uuid.uuid4().hex[:12])
+    agent_trace: dict = {"summary": {}, "events": []}
+
+    def run_agent(handoff_query: str) -> dict:
+        with TRACE_LOCK:
+            tracing.begin("converse-" + session_id[:8])
+            try:
+                res = agent.answer(handoff_query)
+            except Exception:
+                tracing.end()
+                raise
+            summary, events = tracing.end()
+            agent_trace["summary"] = summary
+            agent_trace["events"] = events
+            return res
+
+    t0 = time.perf_counter()
+    try:
+        fd_res = front_door.converse(session_id, message, answer_fn=run_agent)
+    except Exception as exc:
+        return 502, {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    latency_s = time.perf_counter() - t0
+
+    ag_sum = agent_trace.get("summary") or {}
+    ag_events = agent_trace.get("events") or []
+    ag_in = int(ag_sum.get("tokens_in", 0) or 0)
+    ag_out = int(ag_sum.get("tokens_out", 0) or 0)
+    fd_in = int(fd_res.get("tokens_in", 0) or 0)
+    fd_out = int(fd_res.get("tokens_out", 0) or 0)
+    total_in = fd_in + ag_in
+    total_out = fd_out + ag_out
+    latency_ms = int(round(latency_s * 1000))
+
+    safe_user_query, otp_tokens = guardrails.redact_otp(message)
+    reply = fd_res["reply"]
+    if otp_tokens:
+        reply = _scrub_otp(reply, otp_tokens)
+
+    models_list = list(ag_sum.get("models") or [])
+    if fd_res["front_door_model"] not in ("none", "code") and fd_res["front_door_model"] not in models_list:
+        models_list.append(fd_res["front_door_model"])
+
+    if fd_res["action"] == "handoff":
+        structured = _compute_structured_metadata(
+            fd_res["handoff_query"] or message,
+            fd_res["agent_output"] or "",
+            session_id,
+            ag_sum,
+            ag_events,
+            latency_s,
+        )
+        tts_summary = _scrub_otp(structured["tts_summary"], otp_tokens) if otp_tokens else structured["tts_summary"]
+        return 200, {
+            "ok": True,
+            "contract_version": CONTRACT_VERSION,
+            "session_id": fd_res["session_id"],
+            "action": fd_res["action"],
+            "handoff_reason": fd_res["handoff_reason"],
+            "query": safe_user_query,
+            "intent_state": structured["intent_state"],
+            "reply": reply,
+            "output": reply,
+            "reply_text": reply,
+            "tts_summary": tts_summary,
+            "intro": fd_res["intro"],
+            "agent_output": fd_res["agent_output"],
+            "handoff_query": fd_res["handoff_query"],
+            "slots": fd_res["slots"],
+            "vehicle": structured["vehicle"],
+            "battery": structured["battery"],
+            "weather": structured["weather"],
+            "stations": structured["stations"],
+            "charge_window": structured["charge_window"],
+            "mappo_strategy": structured.get("mappo_strategy"),
+            "green_reward": structured["green_reward"],
+            "follow_up_questions": structured["follow_up_questions"],
+            "guardrails": structured["guardrails"],
+            "meta": {
+                "models": models_list,
+                "model_calls": int(ag_sum.get("model_calls", 0) or 0) + (0 if fd_res["front_door_model"] == "none" else 1),
+                "tool_calls": int(ag_sum.get("tool_calls", 0) or 0) + 1,
+                "front_door_model": fd_res["front_door_model"],
+                "front_door_tokens_in": fd_in,
+                "front_door_tokens_out": fd_out,
+                "agent_models": ag_sum.get("models") or [],
+                "agent_tokens_in": ag_in,
+                "agent_tokens_out": ag_out,
+                "tokens_in": total_in,
+                "tokens_out": total_out,
+                "latency_ms": latency_ms,
+            },
+        }
+
+    slots = fd_res["slots"]
+    veh = slots.get("vehicle") or {"model": None, "vehicle_type": "o_to", "known": False}
+    is_chat = fd_res["action"] == "chat"
+    return 200, {
+        "ok": True,
+        "contract_version": CONTRACT_VERSION,
+        "session_id": fd_res["session_id"],
+        "action": fd_res["action"],
+        "handoff_reason": fd_res["handoff_reason"],
+        "query": safe_user_query,
+        "intent_state": fd_res["action"],
+        "reply": reply,
+        "output": reply,
+        "reply_text": reply,
+        "tts_summary": reply,
+        "intro": None,
+        "agent_output": None,
+        "handoff_query": None,
+        "slots": slots,
+        "vehicle": veh,
+        "battery": {
+            "current_pct": slots.get("current_pct"),
+            "target_pct": slots.get("target_pct"),
+            "safe_range_km": None,
+            "rescue_mode": False,
+        },
+        "weather": {
+            "temp_used_c": slots.get("user_temp_c"),
+            "drain_factor": 1.0,
+            "solar_wm2": None,
+            "solar_best_window": None,
+        },
+        "stations": [],
+        "charge_window": None,
+        "mappo_strategy": None,
+        "green_reward": {
+            "eligible": False,
+            "points": 0,
+            "reasons": [],
+            "requires_user_confirmation": False,
+            "confirm_token": None,
+        },
+        "follow_up_questions": [front_door.PARTIAL_OFFER_TEXT] if fd_res["action"] == "partial_prompt" else [],
+        "guardrails": {
+            "passed": True,
+            "fallback_used": False,
+            "excluded_note": None,
+            "model": fd_res["front_door_model"],
+            "model_calls": 1 if is_chat else 0,
+            "tool_calls": 1,
+            "tokens_in": fd_in,
+            "tokens_out": fd_out,
+            "latency_s": round(latency_s, 3),
+        },
+        "meta": {
+            "models": models_list,
+            "model_calls": 1 if is_chat else 0,
+            "tool_calls": 1,
+            "front_door_model": fd_res["front_door_model"],
+            "front_door_tokens_in": fd_in,
+            "front_door_tokens_out": fd_out,
+            "agent_models": [],
+            "agent_tokens_in": 0,
+            "agent_tokens_out": 0,
+            "tokens_in": fd_in,
+            "tokens_out": fd_out,
+            "latency_ms": latency_ms,
+        },
+    }
+
+
 def handle_session_reset(payload: dict) -> tuple[int, dict]:
     """Xử lý POST /api/v1/session/reset để xoá ngữ cảnh hội thoại của session_id."""
     session_id = str(payload.get("session_id") or "").strip()
     if not session_id:
         return 400, {"ok": False, "error": "Thiếu 'session_id'."}
     with STATE_LOCK:
-        cleared = SESSIONS.pop(session_id, None) is not None
-    return 200, {"ok": True, "session_id": session_id, "cleared": cleared}
+        chat_cleared = SESSIONS.pop(session_id, None) is not None
+    fd_cleared = front_door.reset_session(session_id)
+    return 200, {"ok": True, "session_id": session_id, "cleared": chat_cleared or fd_cleared}
 
 
 def handle_green_confirm(payload: dict) -> tuple[int, dict]:
@@ -1316,6 +1589,23 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 client_ip,
                 resp,
                 _payload_to_query(payload),
+            )
+            return
+        if path == "/api/v1/converse":
+            status, resp = handle_converse(payload)
+            self._send_json(status, resp)
+            log_query = (
+                (resp.get("handoff_query") if isinstance(resp, dict) else None)
+                or _payload_to_query(payload)
+            )
+            _record_request_log(
+                "POST",
+                path,
+                status,
+                int(round((time.perf_counter() - t0) * 1000)),
+                client_ip,
+                resp,
+                log_query,
             )
             return
         if path == "/api/v1/session/reset":

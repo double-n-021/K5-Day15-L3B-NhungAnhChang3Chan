@@ -275,7 +275,29 @@ export type ApiIntentState =
   | 'rescue'
   | 'home_charging'
   | 'ask_back'
-  | 'refusal';
+  | 'refusal'
+  | 'chat'
+  | 'partial_prompt';
+
+export type ApiConverseAction = 'chat' | 'partial_prompt' | 'handoff';
+
+export interface ApiFrontDoorSlots {
+  vehicle: {
+    model: string | null;
+    vehicle_type: 'o_to' | 'xe_may';
+    known: boolean;
+  } | null;
+  current_pct: number | null;
+  target_pct: number | null;
+  origin: string | null;
+  place_phrase: string | null;
+  destination: string | null;
+  now_h: string | null;
+  next_h: string | null;
+  next_day: boolean;
+  weekday: string | null;
+  user_temp_c: number | null;
+}
 
 export type ApiConnectionStatus = 'idle' | 'checking' | 'online' | 'offline';
 
@@ -370,6 +392,12 @@ export interface ApiChatResponse {
   ok: boolean;
   contract_version: string;
   session_id: string;
+  action?: ApiConverseAction;
+  handoff_reason?: string | null;
+  intro?: string | null;
+  agent_output?: string | null;
+  handoff_query?: string | null;
+  slots?: ApiFrontDoorSlots | null;
   query: string;
   intent_state: ApiIntentState;
   output: string;
