@@ -566,9 +566,22 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
           ? Math.max(5, Math.min(100, Math.round(resp.battery.current_pct)))
           : get().journeyInput.batteryPct;
 
+      const nextOrigin: PlacePoint =
+        resp.origin &&
+        typeof resp.origin.lat === 'number' &&
+        typeof resp.origin.lon === 'number'
+          ? {
+              id: `api_origin_${resp.origin.lat.toFixed(4)}_${resp.origin.lon.toFixed(4)}`,
+              name: resp.origin.name,
+              shortName: resp.origin.name,
+              coordinates: [resp.origin.lon, resp.origin.lat],
+            }
+          : get().journeyInput.origin;
+
       const nextInput: JourneyInput = {
         ...get().journeyInput,
         rawPrompt: trimmed,
+        origin: nextOrigin,
         vehicleId: nextVehicleId,
         batteryPct: nextBattery,
       };
@@ -622,14 +635,14 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
 
       // Refine proposed option distances & drive times using real live OSRM road routing (matches Google Maps)
       if (options.length > 0) {
-        const originCoord = effectiveInput.origin.coordinates;
+        const originCoord = nextOrigin.coordinates;
         const reqSession = resp.session_id || apiSessionId;
         void Promise.all(
           options.map(async (opt) => {
             if (opt.stationLat == null || opt.stationLon == null) return opt;
             try {
               const route = await fetchLiveOsrmRoute({
-                fromId: effectiveInput.origin.id || 'gps_origin',
+                fromId: nextOrigin.id || 'gps_origin',
                 toId: opt.apiStationId || opt.hanoiStationId || opt.id,
                 originCoord,
                 destCoord: [opt.stationLon, opt.stationLat],

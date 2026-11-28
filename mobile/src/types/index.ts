@@ -411,6 +411,12 @@ export interface ApiChatResponse {
     vehicle_type: 'o_to' | 'xe_may';
     known: boolean;
   };
+  origin?: {
+    name: string;
+    lat: number;
+    lon: number;
+    via?: string;
+  } | null;
   battery: {
     current_pct: number | null;
     target_pct: number | null;
