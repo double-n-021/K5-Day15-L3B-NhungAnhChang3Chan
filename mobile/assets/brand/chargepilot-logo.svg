@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="cpArcGrad" x1="22" y1="22" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#18E299" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="cpBoltGrad" x1="46" y1="36" x2="72" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="55%" stop-color="#A7F3D0" />
+      <stop offset="100%" stop-color="#18E299" />
+    </linearGradient>
+    <linearGradient id="cpSparkGrad" x1="82" y1="18" x2="106" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#18E299" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Subtle Recessed EV Gauge Track -->
+  <circle
+    cx="58"
+    cy="62"
+    r="39"
+    stroke="rgba(56, 189, 248, 0.16)"
+    stroke-width="11"
+  />
+
+  <!-- Actor 1: Energy C-Arc -->
+  <path
+    id="arcPath"
+    d="M 87.0 88.1 A 39 39 0 1 1 84.1 33.0"
+    stroke="url(#cpArcGrad)"
+    stroke-width="11"
+    stroke-linecap="round"
+  />
+
+  <!-- Actor 2: Pilot Lightning-Chevron -->
+  <path
+    id="boltPath"
+    d="M 63 36 L 41 65 L 55 65 L 51 88 L 75 57 L 60 57 Z"
+    fill="url(#cpBoltGrad)"
+    stroke="url(#cpBoltGrad)"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+
+  <!-- Actor 3: Core Spark -->
+  <path
+    id="sparkPath"
+    d="M 94 18 Q 95.5 28.5 106 30 Q 95.5 31.5 94 42 Q 92.5 31.5 82 30 Q 92.5 28.5 94 18 Z"
+    fill="url(#cpSparkGrad)"
+  />
+</svg>

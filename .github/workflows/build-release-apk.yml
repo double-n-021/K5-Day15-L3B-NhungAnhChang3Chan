@@ -14,17 +14,26 @@ on:
         description: "URL HTTPS Backend VPS mặc định nhúng vào APK"
         required: true
         default: "https://maintaining-podcast-down-coding.trycloudflare.com"
+      build_type:
+        description: "Loại APK (release = bản phát hành, debug = Dev Client cho Metro Hot Reload)"
+        type: choice
+        required: true
+        default: "release"
+        options:
+          - release
+          - debug
 
 permissions:
   contents: write
 
 jobs:
   build-android-apk:
-    name: Build & Publish ChargePilot-AI-release.apk
+    name: Build & Publish ChargePilot-AI APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
       EXPO_PUBLIC_API_BASE_URL: ${{ github.event.inputs.api_base_url || 'https://maintaining-podcast-down-coding.trycloudflare.com' }}
+      BUILD_TYPE: ${{ github.event_name == 'push' && 'release' || github.event.inputs.build_type || 'release' }}
 
     steps:
       - name: Checkout repository
@@ -56,39 +65,54 @@ jobs:
         working-directory: mobile
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Build Release APK
+      - name: Build APK (${{ env.BUILD_TYPE }})
         working-directory: mobile/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+          if [ "${{ env.BUILD_TYPE }}" = "debug" ]; then
+            ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+          else
+            ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+          fi
 
-      - name: Verify & stage ChargePilot-AI-release.apk
+      - name: Verify & stage APK
         id: apk
         run: |
-          APK_SRC="mobile/android/app/build/outputs/apk/release/app-release.apk"
+          if [ "${{ env.BUILD_TYPE }}" = "debug" ]; then
+            APK_SRC="mobile/android/app/build/outputs/apk/debug/app-debug.apk"
+            APK_OUT="ChargePilot-AI-debug.apk"
+            ARTIFACT_NAME="ChargePilot-AI-debug-apk"
+          else
+            APK_SRC="mobile/android/app/build/outputs/apk/release/app-release.apk"
+            APK_OUT="ChargePilot-AI-release.apk"
+            ARTIFACT_NAME="ChargePilot-AI-release-apk"
+          fi
           if [ ! -f "$APK_SRC" ]; then
             echo "::error::Không tìm thấy $APK_SRC sau khi Gradle build!"
             exit 1
           fi
-          cp "$APK_SRC" ./ChargePilot-AI-release.apk
-          python3 -m zipfile -t ChargePilot-AI-release.apk
-          ls -lh ChargePilot-AI-release.apk
-          sha256sum ChargePilot-AI-release.apk
+          cp "$APK_SRC" "./${APK_OUT}"
+          python3 -m zipfile -t "./${APK_OUT}"
+          ls -lh "./${APK_OUT}"
+          sha256sum "./${APK_OUT}"
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${{ github.ref_name }}"
           else
             TAG="${{ github.event.inputs.release_tag }}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "apk_file=${APK_OUT}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChargePilot-AI-release-apk
-          path: ChargePilot-AI-release.apk
+          name: ${{ steps.apk.outputs.artifact_name }}
+          path: ${{ steps.apk.outputs.apk_file }}
           retention-days: 14
 
       - name: Publish GitHub Release (${{ steps.apk.outputs.tag }})
+        if: env.BUILD_TYPE == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
@@ -101,6 +125,7 @@ jobs:
           files: ChargePilot-AI-release.apk
 
       - name: Check VPS secrets configured
+        if: env.BUILD_TYPE == 'release'
         id: check_secrets
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -113,7 +138,7 @@ jobs:
           fi
 
       - name: Deploy new Release APK to VPS
-        if: steps.check_secrets.outputs.configured == 'true'
+        if: env.BUILD_TYPE == 'release' && steps.check_secrets.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}

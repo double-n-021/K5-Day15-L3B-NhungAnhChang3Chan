@@ -1,196 +1,97 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
-  Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
-import { stripMarkdown } from '@/components/shared/MarkdownText';
-import { COLORS, RADIUS, SHADOWS, SPACING } from '@/theme/tokens';
-import { TYPOGRAPHY } from '@/theme/typography';
-import type { MascotMood } from '@/types';
+import { COLORS } from '@/theme/tokens';
 
-const MASCOT_ORIGINAL_P006 = require('../../../assets/mascot/pilot-bot.webp');
+const PILOT_BOT = require('../../../assets/mascot/pilot-bot.webp');
 
-interface MascotAssistantProps {
-  mood?: MascotMood;
-  speech: string;
-  size?: number;
-  badgeText?: string;
-  compact?: boolean;
-}
+export type AssistantMood = 'idle' | 'listening' | 'thinking' | 'warning' | 'result' | 'refusal' | 'rescue' | 'happy' | 'offline';
 
-const MOOD_ACCENT: Record<MascotMood, string> = {
-  idle: COLORS.border,
+export const MOOD_ACCENT: Record<AssistantMood, string> = {
+  idle: COLORS.textSecondary,
   listening: COLORS.energyGreen,
   thinking: COLORS.navBlue,
-  happy: COLORS.energyGreen,
   warning: COLORS.warningAmber,
+  result: COLORS.energyGreen,
+  refusal: COLORS.criticalRed,
+  rescue: COLORS.criticalRed,
+  happy: COLORS.energyGreen,
+  offline: COLORS.textSecondary,
 };
 
 export function MascotAssistant({
-  mood = 'idle',
-  speech,
-  size = 64,
-  badgeText,
-  compact = false,
-}: MascotAssistantProps) {
+  mood,
+  size,
+  audioLevel,
+}: {
+  mood: AssistantMood;
+  size: number;
+  audioLevel: SharedValue<number>;
+}) {
   const reducedMotion = useReducedMotion();
-  const floatY = useSharedValue(0);
-  const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0.35);
-
-  const displaySize = compact ? Math.max(46, size - 16) : size;
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    floatY.value = withRepeat(
-      withSequence(
-        withTiming(-3, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(3, { duration: 1500, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-  }, [floatY, reducedMotion]);
-
-  useEffect(() => {
-    if (reducedMotion || (mood !== 'listening' && mood !== 'thinking')) {
-      pulseScale.value = withTiming(1, { duration: 250 });
-      pulseOpacity.value = withTiming(0, { duration: 250 });
-      return;
-    }
-    pulseScale.value = withRepeat(
-      withSequence(
-        withTiming(1.24, { duration: 900, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 900, easing: Easing.in(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-    pulseOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.6, { duration: 450 }),
-        withTiming(0.15, { duration: 1350 })
-      ),
-      -1,
-      false
-    );
-  }, [mood, pulseOpacity, pulseScale, reducedMotion]);
-
-  const avatarAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: floatY.value }],
-  }));
-
-  const ringAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
-  }));
-
+  const movement = useSharedValue(0);
   const accent = MOOD_ACCENT[mood];
 
-  return (
-    <View style={styles.row}>
-      <View style={[styles.avatarWrap, { width: displaySize + 10, height: displaySize + 10 }]}>
-        <Animated.View
-          style={[
-            styles.pulseRing,
-            {
-              width: displaySize + 6,
-              height: displaySize + 6,
-              borderRadius: (displaySize + 6) / 2,
-              borderColor: accent,
-            },
-            ringAnimStyle,
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.avatarCircle,
-            {
-              width: displaySize,
-              height: displaySize,
-              borderRadius: displaySize / 2,
-              borderColor: accent,
-            },
-            avatarAnimStyle,
-          ]}
-        >
-          <Image
-            source={MASCOT_ORIGINAL_P006}
-            style={{
-              width: displaySize - 4,
-              height: displaySize - 4,
-              borderRadius: (displaySize - 4) / 2,
-            }}
-            contentFit="cover"
-          />
-        </Animated.View>
-      </View>
+  useEffect(() => {
+    movement.set(0);
+    if (reducedMotion) return;
+    if (mood === 'thinking') {
+      movement.set(withRepeat(withTiming(1, { duration: 1200 }), -1));
+    } else if (mood === 'idle' || mood === 'rescue') {
+      movement.set(withRepeat(withTiming(1, { duration: 1450 }), -1, true));
+    } else if (mood === 'happy') {
+      movement.set(withSequence(withTiming(1, { duration: 220 }), withTiming(0, { duration: 360 })));
+    }
+    return () => cancelAnimation(movement);
+  }, [mood, movement, reducedMotion]);
 
-      <View
+  const avatarStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: mood === 'idle' || mood === 'happy' ? -5 * movement.get() : 0 },
+      { rotate: mood === 'warning' ? '-9deg' : '0deg' },
+    ],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: mood === 'rescue' ? 0.35 + movement.get() * 0.6 : 0.75,
+    transform: [
+      { scale: mood === 'listening' && !reducedMotion ? 1 + audioLevel.get() * 0.18 : 1 },
+      { rotate: mood === 'thinking' ? `${movement.get() * 360}deg` : '0deg' },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      accessible={false}
+      style={[styles.frame, { width: size + 8, height: size + 8 }, avatarStyle]}
+    >
+      <Animated.View
         style={[
-          styles.bubble,
-          compact && styles.bubbleCompact,
-          { borderColor: mood === 'idle' ? COLORS.border : accent },
+          styles.ring,
+          { borderColor: accent, borderRadius: (size + 8) / 2 },
+          mood === 'thinking' && { borderLeftColor: 'transparent', borderBottomColor: COLORS.navBlueDim },
+          ringStyle,
         ]}
-      >
-        {badgeText ? (
-          <Text style={[TYPOGRAPHY.micro, { color: accent, marginBottom: 2 }]}>
-            {badgeText}
-          </Text>
-        ) : null}
-        <Text
-          style={[
-            compact ? TYPOGRAPHY.caption : TYPOGRAPHY.body,
-            { color: COLORS.textPrimary, lineHeight: compact ? 18 : 20 },
-          ]}
-          numberOfLines={compact ? 3 : undefined}
-        >
-          {stripMarkdown(speech)}
-        </Text>
-      </View>
-    </View>
+      />
+      <Image
+        source={PILOT_BOT}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        contentFit="cover"
+      />
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  avatarWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    borderWidth: 2,
-  },
-  avatarCircle: {
-    borderWidth: 2,
-    backgroundColor: '#0B1017',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    ...SHADOWS.card,
-  },
-  bubble: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    paddingHorizontal: SPACING.md + 2,
-    paddingVertical: SPACING.md,
-  },
-  bubbleCompact: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-  },
+  frame: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  ring: { ...StyleSheet.absoluteFill, borderWidth: 2 },
 });

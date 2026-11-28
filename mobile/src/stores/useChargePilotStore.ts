@@ -33,6 +33,7 @@ import { fetchCurrentUserLocation } from '@/services/locationService';
 import type {
   ApiChatResponse,
   ApiConnectionStatus,
+  ApiIntentState,
   ApiLeaderboardEntry,
   ChargingPreference,
   ChargingStation,
@@ -89,6 +90,12 @@ interface ChargePilotState {
   rewardHistory: { id: string; title: string; points: number; time: string }[];
   voiceDrawerTrigger: number;
 
+  // Battery % the driver explicitly reported (quick chips on Home or a % in a message).
+  // null = never reported: the 18% default is demo data and must never be sent to the AI.
+  batteryConfirmedAt: number | null;
+  // Prompt queued from Home, submitted by the Journey screen so it reuses its thinking/fallback UI.
+  pendingPrompt: string | null;
+
   // Live GPS Origin state
   gpsStatus: 'idle' | 'loading' | 'ready' | 'denied' | 'error';
   locationLabel: string;
@@ -103,6 +110,9 @@ interface ChargePilotState {
   setUserOrigin: (place: PlacePoint, displayLabel?: string) => void;
   refreshUserLocation: () => Promise<void>;
   setBatteryPct: (pct: number) => void;
+  confirmBatteryPct: (pct: number) => void;
+  queuePrompt: (prompt: string) => void;
+  consumePendingPrompt: () => string | null;
   setArrivalDeadline: (hhmm: string) => void;
   shiftArrivalDeadline: (deltaMin: number) => void;
   setPreference: (pref: ChargingPreference) => void;
@@ -117,9 +127,10 @@ interface ChargePilotState {
   sendPromptToApi: (prompt: string) => Promise<void>;
   confirmGreenToken: (token: string, label?: string) => Promise<boolean>;
   resetApiSession: () => Promise<void>;
-  acceptProposedItinerary: () => void;
+  acceptProposedItinerary: (confirmReward?: boolean) => void;
+  confirmAcceptedItineraryReward: () => Promise<boolean>;
   declineProposedItinerary: () => void;
-  requestAlternativeOption: () => void;
+  requestAlternativeOption: (index?: number) => void;
   triggerVoiceAssistant: () => void;
   selectStation: (stationId: string) => void;
   toggleScenario: (scenarioId: WhatIfScenarioId) => void;
@@ -198,6 +209,30 @@ function recompute(
 
 const initialComputed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, [], 'metropolis');
 
+// A reported battery % is reused for this long, then the driver is asked again (pin tụt khi xe chạy).
+export const BATTERY_CONFIRM_TTL_MS = 30 * 60 * 1000;
+const PCT_IN_TEXT_RE = /\d{1,3}\s*%/;
+
+function shouldAttachBatteryToPrompt(trimmed: string, lastIntentState?: ApiIntentState | null): boolean {
+  if (PCT_IN_TEXT_RE.test(trimmed)) return false;
+
+  const isDecline = /^(không|khong|ko|k|thôi|chưa cần|để sau|khỏi|no|nope)(?![\p{L}\p{M}\p{N}_])/iu.test(trimmed);
+  const isGuardrailProbe = /(đặt cọc|giữ trụ|thanh toán|chuyển khoản|otp|đà nẵng|hải phòng|sài gòn|tp\.?\s*hcm)/i.test(trimmed);
+  if (isDecline || isGuardrailProbe) return false;
+
+  const hasTripIntent =
+    /(trạm|sạc|gần nhất|còn trống|hết pin|pin yếu)/i.test(trimmed) ||
+    /(?:^|[^\p{L}\p{M}\p{N}_])(?:đi|tới|đến|sang|qua)\s+|(?:^|[^\p{L}\p{M}\p{N}_])lúc\s+\d/iu.test(trimmed);
+  const isGreetingOrFaq = /(?:^|[^\p{L}\p{M}\p{N}_])(chào|xin chào|hello|hi|hey|alo|tính sao|làm được gì|giới thiệu|bảng xếp hạng|đọc kết quả|hướng dẫn|green score là gì)(?![\p{L}\p{M}\p{N}_])/iu.test(trimmed);
+  if (isGreetingOrFaq && !hasTripIntent) return false;
+
+  return hasTripIntent || lastIntentState === 'ask_back' || lastIntentState === 'partial_prompt';
+}
+
+export function isBatteryFresh(confirmedAt: number | null): boolean {
+  return confirmedAt !== null && Date.now() - confirmedAt <= BATTERY_CONFIRM_TTL_MS;
+}
+
 export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   vehicleId: DEFAULT_INPUT.vehicleId,
   journeyInput: DEFAULT_INPUT,
@@ -226,23 +261,25 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
   driverName: 'Tài xế ChargePilot',
   confirmedTokens: [],
 
-  greenPoints: 120,
+  greenPoints: 65,
   creditedOptionIds: [],
   rewardHistory: [
     {
       id: 'init-noon',
       title: 'Sạc khung trưa nắng 12:15 tại Metropolis',
-      points: 80,
+      points: 45,
       time: 'Hôm qua',
     },
     {
       id: 'init-offpeak',
       title: 'Sạc trạm vắng tại Vincom Bà Triệu',
-      points: 40,
+      points: 20,
       time: '3 ngày trước',
     },
   ],
   voiceDrawerTrigger: 0,
+  batteryConfirmedAt: null,
+  pendingPrompt: null,
 
   gpsStatus: 'idle',
   locationLabel: 'Đang định vị...',
@@ -296,6 +333,22 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
       journeyInput: nextInput,
       ...computed,
     });
+  },
+
+  confirmBatteryPct: (pct) => {
+    get().setBatteryPct(pct);
+    set({ batteryConfirmedAt: Date.now() });
+  },
+
+  queuePrompt: (prompt) => {
+    const trimmed = prompt.trim();
+    if (trimmed) set({ pendingPrompt: trimmed });
+  },
+
+  consumePendingPrompt: () => {
+    const p = get().pendingPrompt;
+    if (p !== null) set({ pendingPrompt: null });
+    return p;
   },
 
   setArrivalDeadline: (hhmm) => {
@@ -481,9 +534,17 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     const [originLon, originLat] = effectiveInput.origin.coordinates;
     const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
 
+    // Reuse a recent battery report for charging and trip requests or related follow-ups.
+    const mentionsPct = PCT_IN_TEXT_RE.test(trimmed);
+    const messageToSend =
+      isBatteryFresh(get().batteryConfirmedAt) &&
+      shouldAttachBatteryToPrompt(trimmed, get().lastApiResponse?.intent_state)
+        ? `${trimmed.replace(/[.\s]+$/, '')}. Pin còn ${get().journeyInput.batteryPct}%.`
+        : trimmed;
+
     try {
       const resp = await sendConverseMessage(apiBaseUrl, {
-        message: trimmed,
+        message: messageToSend,
         session_id: apiSessionId,
         device_context: {
           lat: originLat,
@@ -541,6 +602,10 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         apiSourceMode: 'live',
         apiModelName: resp.guardrails?.model || get().apiModelName,
         lastApiResponse: resp,
+        // The driver typed a % themselves: treat it as a fresh report.
+        ...(mentionsPct && resp.battery?.current_pct !== null && resp.battery?.current_pct !== undefined
+          ? { batteryConfirmedAt: Date.now() }
+          : {}),
         apiSessionId: resp.session_id || apiSessionId,
         apiLoading: false,
         apiError: null,
@@ -658,48 +723,41 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     });
   },
 
-  acceptProposedItinerary: () => {
-    const {
-      proposedOptions,
-      activeOptionIndex,
-      selectedStationId,
-      greenPoints,
-      creditedOptionIds,
-      rewardHistory,
-    } = get();
+  acceptProposedItinerary: (confirmReward = true) => {
+    const { proposedOptions, activeOptionIndex, selectedStationId } = get();
     const active = proposedOptions[activeOptionIndex];
-    const pts = active?.reward.points ?? 0;
-
-    if (active?.isLiveApi) {
-      set({
-        itineraryStatus: 'accepted',
-        selectedStationId: active.hanoiStationId ?? active.apiStationId ?? selectedStationId,
-      });
-      if (active.confirmToken && pts > 0) {
-        void get().confirmGreenToken(active.confirmToken, active.stationName);
-      }
-      return;
-    }
-
-    const shouldCredit = active && pts > 0 && !creditedOptionIds.includes(active.id);
-
+    if (!active) return;
     set({
       itineraryStatus: 'accepted',
-      selectedStationId: active?.hanoiStationId ?? selectedStationId,
-      greenPoints: shouldCredit ? greenPoints + pts : greenPoints,
-      creditedOptionIds: shouldCredit ? [...creditedOptionIds, active.id] : creditedOptionIds,
-      rewardHistory: shouldCredit
-        ? [
-            {
-              id: active.id,
-              title: `${active.reward.label} · ${active.stationName}`,
-              points: pts,
-              time: 'Vừa nhận',
-            },
-            ...rewardHistory,
-          ]
-        : rewardHistory,
+      selectedStationId: active.hanoiStationId ?? active.apiStationId ?? selectedStationId,
     });
+    if (confirmReward) void get().confirmAcceptedItineraryReward();
+  },
+
+  confirmAcceptedItineraryReward: async () => {
+    const {
+      proposedOptions, activeOptionIndex, itineraryStatus, greenPoints, creditedOptionIds, rewardHistory,
+    } = get();
+    const active = proposedOptions[activeOptionIndex];
+    if (itineraryStatus !== 'accepted' || !active || active.reward.points <= 0) return false;
+    if (active.isLiveApi) {
+      return active.confirmToken ? get().confirmGreenToken(active.confirmToken, active.stationName) : false;
+    }
+    if (creditedOptionIds.includes(active.id)) return true;
+    set({
+      greenPoints: greenPoints + active.reward.points,
+      creditedOptionIds: [...creditedOptionIds, active.id],
+      rewardHistory: [
+        {
+          id: active.id,
+          title: `${active.reward.label} · ${active.stationName}`,
+          points: active.reward.points,
+          time: 'Vừa nhận',
+        },
+        ...rewardHistory,
+      ],
+    });
+    return true;
   },
 
   declineProposedItinerary: () => {
@@ -708,15 +766,16 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     });
   },
 
-  requestAlternativeOption: () => {
+  requestAlternativeOption: (index) => {
     const { proposedOptions, activeOptionIndex, selectedStationId } = get();
     if (proposedOptions.length === 0) return;
-    const nextIdx = (activeOptionIndex + 1) % proposedOptions.length;
+    const nextIdx = index ?? (activeOptionIndex + 1) % proposedOptions.length;
     const nextOpt = proposedOptions[nextIdx];
+    if (!nextOpt || nextIdx === activeOptionIndex) return;
     set({
       activeOptionIndex: nextIdx,
       itineraryStatus: 'pending',
-      selectedStationId: nextOpt?.hanoiStationId ?? nextOpt?.apiStationId ?? selectedStationId,
+      selectedStationId: nextOpt.hanoiStationId ?? nextOpt.apiStationId ?? selectedStationId,
     });
   },
 

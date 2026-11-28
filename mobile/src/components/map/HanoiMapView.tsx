@@ -9,7 +9,7 @@ import {
   type MapRef,
   Marker,
 } from '@maplibre/maplibre-react-native';
-import { Zap } from 'lucide-react-native';
+import { BatteryCharging, Check, Clock, EvCharger, HelpCircle, Wrench } from 'lucide-react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { CHARGEPILOT_DARK_MAP_STYLE } from '@/theme/mapDarkStyle';
 import { COLORS, RADIUS, SHADOWS } from '@/theme/tokens';
@@ -23,18 +23,12 @@ const MAP_STYLES = {
 
 const HANOI_DEFAULT_CENTER: [number, number] = [105.8542, 21.0285];
 
-function getStatusColor(status: StationStatus): string {
-  switch (status) {
-    case 'available':
-      return COLORS.energyGreen;
-    case 'busy':
-      return COLORS.warningAmber;
-    case 'maintenance':
-      return COLORS.criticalRed;
-    default:
-      return COLORS.unknownGray;
-  }
-}
+const STATION_STATUS_BADGES = {
+  available: { color: COLORS.energyGreen, Icon: Check },
+  busy: { color: COLORS.warningAmber, Icon: Clock },
+  maintenance: { color: COLORS.criticalRed, Icon: Wrench },
+  unknown: { color: COLORS.unknownGray, Icon: HelpCircle },
+} satisfies Record<StationStatus, { color: string; Icon: typeof Check }>;
 
 export interface MapRouteLayerItem {
   id: string;
@@ -266,7 +260,10 @@ export function HanoiMapView({
         {stations.map((station) => {
           const isSelected = station.id === selectedStationId;
           const isRecommended = station.id === recommendedStationId;
-          const statusColor = getStatusColor(station.status);
+          const StationIcon =
+            station.supportsBatterySwap && vehicleCategory === 'motorbike' ? BatteryCharging : EvCharger;
+          const { color: statusColor, Icon: StatusIcon } =
+            STATION_STATUS_BADGES[station.status] ?? STATION_STATUS_BADGES.unknown;
           const countLabel =
             station.status === 'maintenance'
               ? 'BT'
@@ -292,8 +289,9 @@ export function HanoiMapView({
                   { backgroundColor: COLORS.surface },
                 ]}
               >
-                <View style={[styles.markerIconBox, { backgroundColor: statusColor }]}>
-                  <Zap size={11} color="#0B1017" strokeWidth={2.6} />
+                <View style={[styles.markerIconBadge, { backgroundColor: statusColor }]}>
+                  <StationIcon size={14} color={COLORS.bg} strokeWidth={2.4} />
+                  <StatusIcon size={11} color={COLORS.bg} strokeWidth={2.6} />
                 </View>
                 <Text style={[TYPOGRAPHY.micro, styles.markerCount]}>
                   {countLabel}
@@ -365,8 +363,8 @@ const styles = StyleSheet.create({
   stationMarker: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 7,
+    gap: 4,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: RADIUS.pill,
     borderWidth: 1.5,
@@ -377,9 +375,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.12 }],
     borderColor: COLORS.textPrimary,
   },
-  markerIconBox: {
-    width: 18,
+  markerIconBadge: {
+    flexDirection: 'row',
+    gap: 3,
     height: 18,
+    paddingHorizontal: 4,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',

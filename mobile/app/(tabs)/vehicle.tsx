@@ -21,12 +21,18 @@ import {
 } from 'lucide-react-native';
 import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
-import { HANOI_WEATHER_STATES } from '@/data/weather';
 import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
 import type { WeatherConditionId } from '@/types';
+
+// Short switcher labels so both buttons stay one line and equal height (full name is shown on the card).
+const SWITCH_LABELS = {
+  vfe34: { title: 'VinFast VF e34', connector: 'CCS2' },
+  vinfast_evo200: { title: 'Evo200 2023', connector: 'LFP / AC' },
+} as const;
 
 export default function VehicleScreen() {
   const insets = useSafeAreaInsets();
@@ -34,10 +40,9 @@ export default function VehicleScreen() {
     vehicleId,
     setVehicleId,
     journeyInput,
-    setBatteryPct,
+    confirmBatteryPct,
     weather,
     refreshLiveWeather,
-    setWeatherCondition,
     recommendation,
     greenPoints,
     rewardHistory,
@@ -48,6 +53,7 @@ export default function VehicleScreen() {
   } = useChargePilotStore();
 
   const [showLicenses, setShowLicenses] = useState(false);
+  const [showGreenRules, setShowGreenRules] = useState(false);
   const [angleIdx, setAngleIdx] = useState(0);
   const [nameDraft, setNameDraft] = useState(driverName);
 
@@ -71,11 +77,6 @@ export default function VehicleScreen() {
           <Text style={[TYPOGRAPHY.screenTitle, { color: COLORS.textPrimary }]}>
             Xe của tôi
           </Text>
-          <Image
-            source={vehicle.category === 'motorbike' ? ASSETS_3D.scooterIcon : ASSETS_3D.carIcon}
-            style={{ width: 28, height: 28 }}
-            contentFit="contain"
-          />
         </View>
 
         {/* Strict 2-Vehicle Switcher */}
@@ -100,15 +101,16 @@ export default function VehicleScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  {v.name}
+                  {SWITCH_LABELS[id].title}
                 </Text>
                 <Text
                   style={[
                     TYPOGRAPHY.micro,
                     { color: active ? '#0B1017' : COLORS.textSecondary },
                   ]}
+                  numberOfLines={1}
                 >
-                  {v.usableBatteryKwh} kWh · {v.connectorType}
+                  {v.usableBatteryKwh} kWh · {SWITCH_LABELS[id].connector}
                 </Text>
               </Pressable>
             );
@@ -121,7 +123,7 @@ export default function VehicleScreen() {
             <Image
               source={activeAngle.source}
               style={styles.heroImage}
-              contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
+              contentFit="cover"
               transition={150}
             />
             {vehicle.angles.length > 1 && (
@@ -193,7 +195,7 @@ export default function VehicleScreen() {
                 contentFit="contain"
               />
               <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]}>
-                {vehicle.fastChargeNote}
+                {vehicle.fastChargeNote.replace(/->/g, '→')}
               </Text>
             </View>
           </View>
@@ -230,7 +232,7 @@ export default function VehicleScreen() {
                 key={val}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
-                  setBatteryPct(val);
+                  confirmBatteryPct(val);
                 }}
                 style={[
                   styles.presetPctBtn,
@@ -251,13 +253,13 @@ export default function VehicleScreen() {
               </Pressable>
             ))}
             <Pressable
-              onPress={() => setBatteryPct(journeyInput.batteryPct - 2)}
+              onPress={() => confirmBatteryPct(journeyInput.batteryPct - 2)}
               style={styles.miniStep}
             >
               <Minus size={15} color={COLORS.textPrimary} />
             </Pressable>
             <Pressable
-              onPress={() => setBatteryPct(journeyInput.batteryPct + 2)}
+              onPress={() => confirmBatteryPct(journeyInput.batteryPct + 2)}
               style={styles.miniStep}
             >
               <Plus size={15} color={COLORS.textPrimary} />
@@ -305,7 +307,7 @@ export default function VehicleScreen() {
           <View style={styles.greenHeaderRow}>
             <View style={styles.greenTitleLeft}>
               <Image
-                source={ASSETS_3D.trophyGold}
+                source={CUSTOM_ICONS.greenCharge}
                 style={{ width: 22, height: 22, flexShrink: 0 }}
                 contentFit="contain"
               />
@@ -324,7 +326,7 @@ export default function VehicleScreen() {
               >
                 <RefreshCw size={14} color={COLORS.textSecondary} />
               </Pressable>
-              <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.warningAmber }]} numberOfLines={1}>
+              <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]} numberOfLines={1}>
                 {greenPoints}đ
               </Text>
             </View>
@@ -345,7 +347,7 @@ export default function VehicleScreen() {
             <View key={item.id} style={styles.rowBetween}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 }}>
                 <Image
-                  source={ASSETS_3D.medalGold}
+                  source={CUSTOM_ICONS.greenCharge}
                   style={{ width: 16, height: 16, flexShrink: 0 }}
                   contentFit="contain"
                 />
@@ -373,6 +375,48 @@ export default function VehicleScreen() {
                   </Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowGreenRules((v) => !v);
+            }}
+            style={styles.greenRulesToggle}
+            accessibilityRole="button"
+            accessibilityLabel="Cách tính điểm Sạc Xanh"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Info size={14} color={COLORS.energyGreen} />
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700' }]}>
+                Cách tính điểm Sạc Xanh
+              </Text>
+            </View>
+            {showGreenRules ? (
+              <ChevronUp size={15} color={COLORS.energyGreen} />
+            ) : (
+              <ChevronDown size={15} color={COLORS.energyGreen} />
+            )}
+          </Pressable>
+
+          {showGreenRules && (
+            <View style={styles.greenRulesBox}>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +20đ: Sạc ngoài khung cao điểm lưới điện (17:30–22:30)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +15đ: Trùng giờ bức xạ mặt trời cao (≥300 W/m²)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +10đ: Trạm biểu giá bậc giờ QĐ 2892 hoặc sạc tại nhà
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +10đ: Khung thấp điểm đêm (22:30–06:00)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, marginTop: 2 }]}>
+                Điểm chỉ cộng khi bạn bấm xác nhận theo lịch.
+              </Text>
             </View>
           )}
         </View>
@@ -638,6 +682,25 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 10,
     gap: 6,
+  },
+  greenRulesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.energyGreenDim,
+    borderColor: COLORS.energyGreenBorder,
+    borderWidth: 1,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  greenRulesBox: {
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    gap: 4,
   },
   apiStatusBadge: {
     flexDirection: 'row',

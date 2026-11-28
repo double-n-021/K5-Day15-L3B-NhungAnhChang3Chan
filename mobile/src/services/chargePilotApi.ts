@@ -126,10 +126,11 @@ export interface ApiLiveWeatherResponse {
 }
 
 export async function fetchLiveWeather(baseUrl: string): Promise<ApiLiveWeatherResponse> {
-  return requestJson<ApiLiveWeatherResponse>(`${normalizeBaseUrl(baseUrl)}/api/v1/weather`, {
-    method: 'GET',
-    timeoutMs: 6000,
-  });
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base) {
+    throw new Error('Chưa nhập địa chỉ máy chủ VPS.');
+  }
+  return fetchJson<ApiLiveWeatherResponse>(`${base}/api/v1/weather`, { method: 'GET' }, 6000);
 }
 
 export function buildWeatherConditionFromApi(params: {
@@ -193,6 +194,30 @@ export async function checkApiHealth(baseUrl: string): Promise<ApiHealthResponse
     throw new Error('Chưa nhập địa chỉ máy chủ VPS.');
   }
   return fetchJson<ApiHealthResponse>(`${base}/health`, { method: 'GET' }, 8000);
+}
+
+/**
+ * Short map label without the internal station ID. When the name is generic once "Trạm sạc"
+ * is stripped (e.g. many stations are just "VinFast"), append a street, power, or distance
+ * so neighbouring pins can be told apart.
+ */
+function distinctShortName(
+  name: string,
+  address: string | null,
+  powerKw: number | null,
+  roadKm: number | null
+): string {
+  const short = name.replace(/^Trạm sạc\s*/i, '').trim();
+  const generic = short.length < 12 || /^(vinfast|v-green|vgreen|ev)$/i.test(short);
+  if (!generic) return short;
+
+  const street = address?.split(',')[0].trim();
+  if (street && !/^(hà nội|ha noi)$/i.test(street) && !short.toLowerCase().includes(street.toLowerCase())) {
+    return `${short} · ${street}`;
+  }
+  if (powerKw != null) return `${short} · ${powerKw}kW`;
+  if (roadKm != null) return `${short} · ${roadKm.toFixed(1)} km`;
+  return short;
 }
 
 export async function sendChatMessage(
@@ -346,7 +371,7 @@ export function mapApiStationsToChargingStations(resp: ApiChatResponse): Chargin
             : mappedStatus === 'maintenance'
               ? 'maintenance'
               : 'unknown';
-      const short = st.name.replace(/^Trạm sạc\s*/i, '').trim();
+      const short = distinctShortName(st.name, st.address, st.power_kw, st.road_km);
 
       return {
         id: st.id,
@@ -356,6 +381,7 @@ export function mapApiStationsToChargingStations(resp: ApiChatResponse): Chargin
         address: st.address || `Hà Nội (cách ${st.road_km.toFixed(1)} km)`,
         district: 'Hà Nội',
         coordinates: [st.lon, st.lat],
+        roadKm: Number(st.road_km.toFixed(1)),
         coordinateSource: 'CHARGEPILOT Live API v1.0.0',
         isTelemetrySimulated: true,
         status: mappedStatus,
@@ -465,7 +491,7 @@ export function mapApiResponseToProposedOptions(
       {
         id: `api-${st.id}-arrive`,
         time: `+${driveMin}p`,
-        title: `Tới [${st.id}] ${st.name}`,
+        title: `Tới ${st.name}`,
         subtitle: `${st.road_km.toFixed(1)} km · ${st.status_label}${st.power_kw ? ` · ${st.power_kw} kW` : ''}`,
         type: 'driving',
         batteryPct: arrivalPct,
@@ -491,8 +517,8 @@ export function mapApiResponseToProposedOptions(
       optionIndex: idx,
       totalOptions,
       strategyLabel: `Hạng #${st.rank} · ${st.status_label}`,
-      destinationName: 'Hà Nội',
-      stationName: `[${st.id}] ${st.name}`,
+      destinationName: resp.slots?.destination?.trim() || '',
+      stationName: st.name,
       stationAddress: st.address || `Cách ${st.road_km.toFixed(1)} km`,
       distanceKm: Number(st.road_km.toFixed(1)),
       driveMin,

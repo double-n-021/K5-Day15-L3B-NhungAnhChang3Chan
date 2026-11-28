@@ -1,17 +1,33 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { MascotAssistant } from '@/components/mascot/MascotAssistant';
-import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
+import { LocateFixed, Mic } from 'lucide-react-native';
+import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
+import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { ASSETS_3D } from '@/data/assets3d';
+import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
-import { useChargePilotStore } from '@/stores/useChargePilotStore';
+import { isBatteryFresh, useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
 import type { VehicleId } from '@/types';
+
+// Quick battery levels: one tap is enough to stop the AI asking "pin còn bao nhiêu %?".
+const BATTERY_CHIPS = [10, 20, 30, 50, 70, 90];
+
+// Max Green Score at midday per codebase/tools.py estimate_green_reward:
+// off-peak +20, solar ≥300 W/m² +15, QĐ 2892 time-of-use station +10.
+const NOON_MAX_POINTS = 45;
+
+// One-tap example questions filling the lower half of Home (label shown, prompt sent).
+const QUICK_ASKS = [
+  { label: 'Đi Hồ Gươm lúc 15h', prompt: 'Đi Hồ Gươm lúc 15h' },
+  { label: 'Sạc trưa nắng nhận điểm xanh', prompt: 'Sạc trưa nắng ở đâu để nhận điểm Sạc Xanh?' },
+  { label: 'Trạm gần nhất còn trống', prompt: 'Trạm sạc gần nhất còn trống' },
+];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -28,13 +44,20 @@ export default function HomeScreen() {
     activeOptionIndex,
     locationLabel,
     gpsStatus,
+    batteryConfirmedAt,
     refreshUserLocation,
     triggerVoiceAssistant,
+    confirmBatteryPct,
+    queuePrompt,
   } = useChargePilotStore();
+
+  const [promptText, setPromptText] = useState('');
+  const [needBattery, setNeedBattery] = useState(false);
 
   const vehicle = VEHICLES[vehicleId];
   const batteryPct = effectiveInput.batteryPct;
-  const batteryColor = getBatteryColor(batteryPct);
+  const batteryFresh = isBatteryFresh(batteryConfirmedAt);
+  const batteryColor = batteryFresh ? getBatteryColor(batteryPct) : COLORS.textMuted;
   const activeProposal = proposedOptions[activeOptionIndex] ?? null;
 
   const handleTapMic = () => {
@@ -49,204 +72,290 @@ export default function HomeScreen() {
     setVehicleId(nextId);
   };
 
-  const mascotGreeting =
-    itineraryStatus === 'accepted' && activeProposal
-      ? `Mình đang giữ lịch đi ${activeProposal.destinationName}, ghé ${activeProposal.stationName}. Bấm Mic nếu bạn muốn đổi kế hoạch nhé.`
-      : `Chào bạn! Đang chọn ${vehicle.name}. Bấm Mic nói mình biết bạn muốn đi đâu và mấy giờ nhé.`;
+  const handlePickBattery = (pct: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    confirmBatteryPct(pct);
+    setNeedBattery(false);
+  };
+
+  const handleStepBattery = (delta: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    confirmBatteryPct(batteryPct + delta);
+    setNeedBattery(false);
+  };
+
+  const handleFindNearest = () => {
+    // Never send the 18% demo default: the driver must report a real level first.
+    if (!batteryFresh) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      setNeedBattery(true);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    queuePrompt('Tìm trạm sạc gần nhất');
+    router.push('/(tabs)/journey');
+  };
+
+  const handleQuickAsk = (prompt: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    queuePrompt(prompt);
+    router.push('/(tabs)/journey');
+  };
+
+  const shortVehicle = vehicleId === 'vfe34' ? 'VF e34' : 'Evo200';
+
+  const handleSubmitText = () => {
+    const trimmed = promptText.trim();
+    if (!trimmed) return;
+    Keyboard.dismiss();
+    queuePrompt(trimmed);
+    setPromptText('');
+    router.push('/(tabs)/journey');
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Minimal 3D Top Header */}
+        {/* Brand + points */}
         <View style={styles.topBar}>
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              void refreshUserLocation();
-            }}
-            style={styles.locationRow}
-            accessibilityLabel="Cập nhật vị trí GPS hiện tại"
-          >
-            <Image
-              source={ASSETS_3D.mapPinGold}
-              style={{ width: 22, height: 22, flexShrink: 0 }}
-              contentFit="contain"
-            />
-            <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
-              {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
-            </Text>
-          </Pressable>
+          <ChargePilotBrand size={28} />
 
           <Pressable
             onPress={() => router.push('/(tabs)/vehicle')}
             style={styles.pointsPill}
             accessibilityLabel="Điểm Sạc Xanh hiện có"
           >
-            <Image
-              source={ASSETS_3D.trophyGold}
-              style={{ width: 18, height: 18, flexShrink: 0 }}
-              contentFit="contain"
-            />
-            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.warningAmber }]} numberOfLines={1}>
+            <Image source={CUSTOM_ICONS.greenCharge} style={styles.icon18} contentFit="contain" />
+            <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.energyGreen }]} numberOfLines={1}>
               {greenPoints} điểm
             </Text>
           </Pressable>
         </View>
 
-        {/* Strict 2-Vehicle Selector: VinFast VF e34 & VinFast Evo200 2023 */}
-        <View style={styles.catRow}>
-          <Pressable
-            onPress={() => handleSelectVehicle('vfe34')}
-            style={[styles.catPill, vehicleId === 'vfe34' && styles.catPillActive]}
-          >
-            <Image
-              source={ASSETS_3D.carIcon}
-              style={{ width: 20, height: 20, flexShrink: 0 }}
-              contentFit="contain"
-            />
-            <Text
-              style={[
-                TYPOGRAPHY.caption,
-                {
-                  color: vehicleId === 'vfe34' ? '#0B1017' : COLORS.textPrimary,
-                  fontWeight: '700',
-                  flexShrink: 1,
-                },
-              ]}
-              numberOfLines={1}
-            >
-              VinFast VF e34
-            </Text>
-          </Pressable>
+        {/* Compact GPS origin bar */}
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            void refreshUserLocation();
+          }}
+          style={styles.locationRow}
+          accessibilityLabel="Cập nhật vị trí GPS hiện tại"
+        >
+          <LocateFixed size={18} color={COLORS.navBlue} />
+          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flexShrink: 1 }]} numberOfLines={1}>
+            {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
+          </Text>
+        </Pressable>
 
-          <Pressable
-            onPress={() => handleSelectVehicle('vinfast_evo200')}
-            style={[styles.catPill, vehicleId === 'vinfast_evo200' && styles.catPillActive]}
-          >
-            <Image
-              source={ASSETS_3D.scooterIcon}
-              style={{ width: 20, height: 20, flexShrink: 0 }}
-              contentFit="contain"
-            />
-            <Text
-              style={[
-                TYPOGRAPHY.caption,
-                {
-                  color: vehicleId === 'vinfast_evo200' ? '#0B1017' : COLORS.textPrimary,
-                  fontWeight: '700',
-                  flexShrink: 1,
-                },
-              ]}
-              numberOfLines={1}
-            >
-              Evo200 2023
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Vehicle Showcase Card */}
-        <View style={styles.heroCard}>
-          <Image
-            source={vehicle.angles[0].source}
-            style={styles.heroImage}
-            contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
-            transition={150}
-          />
-
-          <View style={styles.heroBody}>
-            <View style={styles.rowBetween}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary }]} numberOfLines={1}>
-                  {vehicle.name}
-                </Text>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1}>
-                  {vehicle.segment} · {effectiveWeather.temperatureC}°C
-                </Text>
-              </View>
-
-              <View style={styles.batteryRight}>
-                <Image
-                  source={ASSETS_3D.battery}
-                  style={{ width: 22, height: 22 }}
-                  contentFit="contain"
-                />
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[TYPOGRAPHY.metricLarge, { color: batteryColor }]}>
-                    {batteryPct}%
+        {/* Vehicle + battery card (compact) */}
+        <View style={styles.card}>
+          <View style={styles.catRow}>
+            {(['vfe34', 'vinfast_evo200'] as VehicleId[]).map((id) => {
+              const active = vehicleId === id;
+              return (
+                <Pressable
+                  key={id}
+                  onPress={() => handleSelectVehicle(id)}
+                  style={[styles.catPill, active && styles.catPillActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text
+                    style={[
+                      TYPOGRAPHY.caption,
+                      { color: active ? '#0B1017' : COLORS.textPrimary, fontWeight: '700', flexShrink: 1 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {id === 'vfe34' ? 'VinFast VF e34' : 'Evo200 2023'}
                   </Text>
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-                    ~{recommendation.summary.estimatedRangeKm} km
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.vehicleRow}>
+            <View style={styles.vehicleSummary}>
+              <Image
+                source={vehicle.angles[0].source}
+                style={styles.vehicleThumb}
+                contentFit="cover"
+                transition={150}
+              />
+              <View style={styles.vehicleStats}>
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
+                  {effectiveWeather.temperatureC}°C
+                </Text>
+                {batteryFresh && (
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
+                    ~{recommendation.summary.estimatedRangeKm}{'\u00a0'}km
                   </Text>
-                </View>
+                )}
               </View>
             </View>
 
-            <AnimatedBatteryBar percentage={batteryPct} height={8} showSegments={false} />
+            <View style={styles.batterySummary}>
+              <View style={styles.batteryReadout}>
+                {batteryFresh && (
+                  <Pressable
+                    onPress={() => handleStepBattery(-5)}
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                    accessibilityLabel="Giảm 5% pin"
+                  >
+                    <Text style={styles.stepTxt}>−</Text>
+                  </Pressable>
+                )}
+                <Text style={[TYPOGRAPHY.metricLarge, { color: batteryColor }]}>
+                  {batteryFresh ? `${batteryPct}%` : '--%'}
+                </Text>
+                {batteryFresh && (
+                  <Pressable
+                    onPress={() => handleStepBattery(5)}
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                    accessibilityLabel="Tăng 5% pin"
+                  >
+                    <Text style={styles.stepTxt}>+</Text>
+                  </Pressable>
+                )}
+              </View>
+              {!batteryFresh && (
+                <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>Chọn mức pin</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.chipsWrap, needBattery && styles.chipsWrapAlert]}>
+            {needBattery && (
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
+                Chọn mức pin trước để mình tìm trạm nhé
+              </Text>
+            )}
+            <View style={styles.chipsRow}>
+              {BATTERY_CHIPS.map((pct) => {
+                const active = batteryFresh && batteryPct === pct;
+                return (
+                  <Pressable
+                    key={pct}
+                    onPress={() => handlePickBattery(pct)}
+                    style={[styles.chip, active && { backgroundColor: getBatteryColor(pct), borderColor: getBatteryColor(pct) }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pin còn ${pct}%`}
+                  >
+                    <Text style={[TYPOGRAPHY.caption, { color: active ? '#0B1017' : COLORS.textPrimary, fontWeight: '700' }]}>
+                      {pct}%
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
 
-        {/* Solar Noon Off-Peak Reward Strip */}
-        <Pressable
-          onPress={handleTapMic}
-          style={styles.noonStrip}
-          accessibilityLabel="Tìm trạm sạc khung giờ trưa nắng nhận điểm thưởng"
-        >
-          <Image
-            source={ASSETS_3D.sunGold}
-            style={{ width: 28, height: 28 }}
-            contentFit="contain"
-          />
-          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1 }]}>
-            Trưa nắng 11:00–14:00 vắng xe: sạc nhận{' '}
-            <Text style={{ color: COLORS.energyGreen, fontWeight: '700' }}>
-              +80 điểm Sạc Xanh
-            </Text>
-          </Text>
-          <Image
-            source={ASSETS_3D.coin}
-            style={{ width: 22, height: 22 }}
-            contentFit="contain"
-          />
-        </Pressable>
-
-        {/* Original P-006 Mascot + 3D Mic Centerpiece */}
-        <View style={styles.voiceStage}>
-          <MascotAssistant
-            mood={itineraryStatus === 'accepted' ? 'happy' : 'idle'}
-            speech={mascotGreeting}
-            size={64}
-          />
-
+        {/* Primary one-tap actions */}
+        <View style={styles.actionRow}>
           <Pressable
             onPress={handleTapMic}
-            style={({ pressed }) => [
-              styles.bigMicBtn,
-              pressed && { transform: [{ scale: 0.96 }], opacity: 0.92 },
-            ]}
+            style={({ pressed }) => [styles.bigMicBtn, pressed && styles.pressed]}
             accessibilityRole="button"
             accessibilityLabel="Bấm Mic để nói với trợ lý AI"
           >
-            <Image
-              source={ASSETS_3D.micGold}
-              style={{ width: 40, height: 40 }}
-              contentFit="contain"
-            />
+            <Mic size={32} color={COLORS.bg} />
+            <Text style={[TYPOGRAPHY.micro, { color: '#0B1017', fontWeight: '700' }]}>Nói</Text>
           </Pressable>
 
-          <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]}>
-            Nhấn Mic để nói với Trợ lý AI
-          </Text>
           <Pressable
-            onPress={() => router.push('/(tabs)/journey')}
-            hitSlop={10}
+            onPress={handleFindNearest}
+            style={({ pressed }) => [styles.nearestBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Tìm trạm sạc gần nhất ngay"
           >
-            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
-              hoặc chạm để gõ yêu cầu bằng chữ
+            <View style={styles.nearestIcon}>
+              <Image source={CUSTOM_ICONS.evStation} style={{ width: 34, height: 34 }} contentFit="contain" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]} numberOfLines={1}>
+                Tìm trạm gần nhất
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]} numberOfLines={2}>
+                {batteryFresh ? `GPS · ${shortVehicle} · pin ${batteryPct}%` : 'Chọn mức pin ở trên trước'}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Always-visible text input */}
+        <View style={styles.inputRow}>
+          <TextInput
+            value={promptText}
+            onChangeText={setPromptText}
+            onSubmitEditing={handleSubmitText}
+            placeholder="Hoặc gõ: đi Hồ Gươm lúc 15h…"
+            placeholderTextColor={COLORS.textMuted}
+            style={[TYPOGRAPHY.bodyMedium, styles.input]}
+            returnKeyType="send"
+            accessibilityLabel="Gõ yêu cầu cho trợ lý AI"
+          />
+          <Pressable
+            onPress={handleSubmitText}
+            disabled={!promptText.trim()}
+            style={[styles.sendBtn, !promptText.trim() && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Gửi yêu cầu"
+          >
+            <Text style={[TYPOGRAPHY.caption, { color: '#0B1017', fontWeight: '700' }]}>Gửi</Text>
+          </Pressable>
+        </View>
+
+        {/* One line when a plan is being held (replaces the mascot greeting) */}
+        {itineraryStatus === 'accepted' && activeProposal && (
+          <Pressable onPress={() => router.push('/(tabs)/journey')} style={styles.planLine}>
+            <Image source={ASSETS_3D.clockGold} style={styles.icon20} contentFit="contain" />
+            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1 }]} numberOfLines={1}>
+              Đang giữ lịch: ghé {activeProposal.stationName}
+              {activeProposal.destinationName && activeProposal.destinationName !== 'Hà Nội'
+                ? ` → ${activeProposal.destinationName}`
+                : ''}
             </Text>
           </Pressable>
+        )}
+
+        {/* Green Score tip: numbers match the backend, tap opens points instead of the mic */}
+        <Pressable
+          onPress={() => router.push('/(tabs)/vehicle')}
+          style={styles.noonStrip}
+          accessibilityLabel="Xem điểm Sạc Xanh"
+        >
+          <Image source={CUSTOM_ICONS.greenCharge} style={{ width: 24, height: 24 }} contentFit="contain" />
+          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={2}>
+            Sạc trưa nắng 11:00–14:00, ngoài cao điểm: đến{' '}
+            <Text style={{ color: COLORS.energyGreen, fontWeight: '700' }}>+{NOON_MAX_POINTS} điểm Sạc Xanh</Text>
+          </Text>
+        </Pressable>
+
+        {/* Quick asks: one tap sends an example question to the assistant */}
+        <View style={styles.quickWrap}>
+          <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>Hỏi nhanh</Text>
+          <View style={styles.quickRow}>
+            {QUICK_ASKS.map((q) => (
+              <Pressable
+                key={q.label}
+                onPress={() => handleQuickAsk(q.prompt)}
+                style={({ pressed }) => [styles.quickChip, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Hỏi nhanh: ${q.label}`}
+              >
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary }]} numberOfLines={1}>
+                  {q.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -260,34 +369,45 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.md - 2,
+    paddingBottom: SPACING.md,
+    gap: 10,
   },
+  icon18: { width: 18, height: 18, flexShrink: 0 },
+  icon20: { width: 20, height: 20, flexShrink: 0 },
+  icon22: { width: 22, height: 22, flexShrink: 0 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.xs,
   },
   locationRow: {
-    flex: 1,
-    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: -2,
   },
   pointsPill: {
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: COLORS.warningAmberDim,
+    backgroundColor: COLORS.energyGreenDim,
     borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
+    borderColor: COLORS.energyGreenBorder,
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: RADIUS.pill,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    gap: 10,
+    ...SHADOWS.card,
   },
   catRow: {
     flexDirection: 'row',
@@ -302,7 +422,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 10,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -310,60 +430,182 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.energyGreen,
     borderColor: COLORS.energyGreen,
   },
-  heroCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
+  vehicleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  vehicleSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 124,
+    gap: SPACING.sm,
+  },
+  vehicleThumb: {
+    width: 72,
+    height: 50,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.bg,
+  },
+  vehicleStats: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  batterySummary: {
+    alignItems: 'flex-end',
+    marginLeft: 'auto',
+  },
+  batteryReadout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stepBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.border,
-    overflow: 'hidden',
-    ...SHADOWS.card,
   },
-  heroImage: {
-    width: '100%',
-    height: 210,
-    backgroundColor: '#0B1017',
+  stepTxt: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: '700',
   },
-  heroBody: {
-    padding: SPACING.md + 2,
-    paddingTop: SPACING.md,
-    gap: SPACING.sm + 2,
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  batteryRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  chipsWrap: {
     gap: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipsWrapAlert: {
+    borderColor: COLORS.criticalRedBorder,
+    backgroundColor: COLORS.criticalRedDim,
+    padding: 6,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  chip: {
+    flex: 1,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    alignItems: 'stretch',
+  },
+  bigMicBtn: {
+    width: 80,
+    minHeight: 76,
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.energyGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderWidth: 3,
+    borderColor: COLORS.energyGreenBorder,
+    ...SHADOWS.floating,
+  },
+  nearestBtn: {
+    flex: 1,
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.energyGreenBorder,
+  },
+  nearestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.energyGreenDim,
+  },
+  quickWrap: {
+    gap: 6,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickChip: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pressed: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.92,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingLeft: SPACING.lg,
+    paddingRight: 6,
+    minHeight: 48,
+  },
+  input: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    paddingVertical: 10,
+  },
+  sendBtn: {
+    paddingHorizontal: SPACING.lg,
+    height: 36,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.energyGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.navBlueDim,
+    borderWidth: 1,
+    borderColor: COLORS.navBlueBorder,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
   },
   noonStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
+    borderColor: COLORS.border,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 3,
-  },
-  voiceStage: {
-    marginTop: 2,
-    gap: SPACING.sm + 2,
-    alignItems: 'center',
-  },
-  bigMicBtn: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    backgroundColor: COLORS.energyGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(54, 230, 163, 0.35)',
-    marginTop: 2,
-    ...SHADOWS.floating,
+    paddingVertical: 8,
   },
 });
