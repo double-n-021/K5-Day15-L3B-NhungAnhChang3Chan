@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|---|---|
 | 1 | `run-1@20261127-193233` | 28/29 | 96,6% | 9/9 | 16/17 | 3/3 | đạt chuẩn tổng (≥80%, an_toan_tram 100%, ma_tram_co_that 100%), nhưng nhóm hỏi lại 3/4 (75%) chưa đạt 80% do lỗi mạng B13 |
 | 2 | `run-2@20261127-221406` | 29/29 | 100% | 9/9 | 17/17 | 3/3 | đạt (vượt ≥80%, an_toan_tram 100%, ma_tram_co_that 100%, hỏi lại 4/4 = 100%) |
-| 3 (sau CP4) | `run-3@20261128-134206` | 27/29 | 93,1% | 9/9 | 15/17 | 3/3 | đạt chuẩn tổng (≥80%, an_toan_tram 100%, ma_tram_co_that 100%, khung_gio_hop_ly 100% câu áp dụng, hỏi lại 100%); B07, B09 trượt tiêu chí hạng 1 (ST_TX_0x / ST_HM_01) vì trạm OSM gần hơn từ lần đồng bộ data `4971eec` |
+| 3 (đo lại trước CP4) | `run-3@20261128-134206` | 27/29 | 93,1% | 9/9 | 15/17 | 3/3 | đạt chuẩn tổng (≥80%, an_toan_tram 100%, ma_tram_co_that 100%, khung_gio_hop_ly 100% câu áp dụng, hỏi lại 100%); B07, B09 trượt tiêu chí hạng 1 (ST_TX_0x / ST_HM_01) vì trạm OSM gần hơn từ lần đồng bộ data `4971eec` |
 
 Kết quả từng câu: `eval/run-1.csv`, `eval/run-2.csv`, `eval/run-3.csv`. Trace: `traces/run-1.jsonl`, `traces/run-2.jsonl`, `traces/run-3.jsonl`.
 

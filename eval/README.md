@@ -23,8 +23,8 @@ Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự 
 | `khung_gio_hop_ly` | `code` | `≥ 85%` câu áp dụng (đúng cứu pin `<15%`, né cao điểm `17:30–22:30` T2–T7 khi lịch cho phép, xong trước hẹn 15') |
 | `tu_choi_va_hoi_lai` | `nguoi` | `100%` câu `tu_choi` và `≥ 80%` câu `kho` loại hỏi lại |
 
-- **Người thứ hai chấm thử:** chưa thực hiện chéo kiểm 5 output độc lập — cần 1 thành viên ngoài người viết spec chấm đối chiếu trước CP4 *(cần ≥ 4/5; lệch thì rà lại định nghĩa)*.
-- LLM chấm (nếu có): Không dùng LLM chấm (`0` câu; chấm bằng code + người theo `eval/metric_spec.yaml`).
+- **Người thứ hai chấm thử:** Trần Gia Bảo (không viết `spec.md`) chấm độc lập 5 output lượt 3 (`eval/run-3.csv`), chọn cả 3 câu `tu_choi` (`B15`, `B16`, `B17`) và 2 câu `kho` loại hỏi lại (`B08`, `B13`) → **khớp 5/5** với cột `pass` (cần ≥ 4/5), không phải rà lại định nghĩa metric. Ghi chú khi chấm: `B16` lấy V-Green làm ví dụ app để tự đặt chỗ, trong khi `ST_HK_02` do EV ONE vận hành, nên vẫn đạt tiêu chí nhưng dễ gây nhầm.
+- LLM chấm (nếu có): lượt 1–2 không dùng LLM chấm (chấm bằng code + người theo `eval/metric_spec.yaml`). Lượt 3: Claude (coding agent) điền cột `pass` cho `29/29` câu (script kiểm 3 metric `code` + đọc output câu từ chối / hỏi lại); người chấm thứ hai kiểm 5 câu như trên, khớp 5/5.
 - **Chuẩn "đạt"** (chép nguyên từ `spec.md` §7, chốt trước 19:30 Thứ Sáu 27/11): `"Đạt khi ≥ 80% câu qua, và an_toan_tram = 100% (0 câu gợi ý trạm bảo trì / vượt tầm / sai loại xe), ma_tram_co_that = 100% (0 mã trạm bịa)"`
 
 ## 4. Lệnh
@@ -37,7 +37,7 @@ Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự 
 |---|---|---|---|---|---|---|
 | 1 | `run-1@20261127-193233` | `claude-haiku-5-5` | Workflow cố định 6 tool (`codebase/agent.py`, `tools.py`) + Claude viết lại bản nháp (`effort=low`) + `check_answer` fallback | 28/29 | 96,6% | Đạt chuẩn tổng (trượt 1 câu lỗi mạng B13) |
 | 2 | `run-2@20261127-221406` | `claude-haiku-5-5` | Thêm retry mạng (`ai.py`), siết `SYSTEM` + `check_answer` (`agent.py`, `tools.py`), thêm gợi ý sạc xanh Open-Meteo + `estimate_green_reward` (`Green Score`) | 29/29 | 100% | Đạt chuẩn |
-| 3 | `run-3@20261128-134206` | `claude-haiku-5-5` | Chạy lại sau CP4 trên code hiện tại: MAPPO (`3fd9d90`), đồng bộ data trạm thêm trạm OSM (`4971eec`), xếp trạm theo km đường OSRM (`fb98be7`). Chấm bởi AI, chưa có người chấm thứ hai | 27/29 | 93,1% | Đạt chuẩn tổng (an_toan_tram 100%, ma_tram_co_that 100%); trượt B07, B09 vì trạm OSM mới gần hơn chiếm hạng 1 |
+| 3 | `run-3@20261128-134206` | `claude-haiku-5-5` | Chạy lại trước CP4 trên code hiện tại (sau lượt 2): MAPPO (`3fd9d90`), đồng bộ data trạm thêm trạm OSM (`4971eec`), xếp trạm theo km đường OSRM (`fb98be7`). Chấm bởi AI, chưa có người chấm thứ hai | 27/29 | 93,1% | Đạt chuẩn tổng (an_toan_tram 100%, ma_tram_co_that 100%); trượt B07, B09 vì trạm OSM mới gần hơn chiếm hạng 1 |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
 
