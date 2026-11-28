@@ -57,12 +57,10 @@ export default function ActiveNavigationScreen() {
 
   const cachedRoute = useMemo(() => {
     if (!targetStation) return null;
-    return (
-      getCachedRoute(effectiveInput.origin.id, targetStation.id) ??
-      recommendation.recommended?.routeToStation ??
-      null
-    );
-  }, [effectiveInput.origin.id, targetStation?.id, recommendation.recommended]);
+    const exact = getCachedRoute(effectiveInput.origin.id, targetStation.id);
+    if (!exact || exact.coordinates.length < 2) return null;
+    return exact;
+  }, [effectiveInput.origin.id, targetStation?.id]);
 
   const [liveRoute, setLiveRoute] = useState<RouteGeometry | null>(null);
   const [isFetchingRoute, setIsFetchingRoute] = useState(false);

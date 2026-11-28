@@ -227,23 +227,40 @@ def _apply_device_context(text: str, ctx: dict | None) -> str:
     is_real_place_phrase = bool(place_phrase_low) and place_phrase_low not in (
         "đâu", "đây", "nào", "chỗ nào", "đâu nhỉ", "đâu vậy", "đâu thế", "gần đây", "gần nhất",
     )
-    if req["origin"] is None and not is_real_place_phrase:
-        lat, lon = ctx.get("lat"), ctx.get("lon")
-        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            landmarks = tools._load("hanoi_landmarks.json") or []
-            nearest = None
-            best_d = 9999.0
-            for lm in landmarks:
-                d = tools.road_km(float(lat), float(lon), lm["lat"], lm["lon"])
-                if d < best_d:
-                    best_d = d
-                    nearest = lm
-            if nearest is not None and best_d <= 5.0:
+    lat, lon = ctx.get("lat"), ctx.get("lon")
+    has_hanoi_gps = (
+        isinstance(lat, (int, float))
+        and isinstance(lon, (int, float))
+        and 20.8 <= float(lat) <= 21.3
+        and 105.6 <= float(lon) <= 106.1
+    )
+    wants_dest_only = (
+        req["origin"] is not None
+        and req["destination"] is None
+        and not is_real_place_phrase
+        and bool(re.search(r"\b(?:muốn đi|đi tới|đi đến|tới|đến|về)\b", text.lower()))
+        and not bool(re.search(r"\b(?:đang ở|từ)\s+(?!đây\b)", text.lower()))
+    )
+    prepend_origin = None
+    if has_hanoi_gps and ((req["origin"] is None and not is_real_place_phrase) or wants_dest_only):
+        landmarks = tools._load("hanoi_landmarks.json") or []
+        nearest = None
+        best_d = 9999.0
+        for lm in landmarks:
+            d = tools.road_km(float(lat), float(lon), lm["lat"], lm["lon"])
+            if d < best_d:
+                best_d = d
+                nearest = lm
+        if nearest is not None and best_d <= (15.0 if wants_dest_only else 5.0):
+            if wants_dest_only and req["origin"] and nearest["name"] != req["origin"]["name"]:
+                prepend_origin = f"Đang ở {nearest['name']}."
+            elif req["origin"] is None:
                 additions.append(f"Đang ở {nearest['name']}")
 
+    out_text = f"{prepend_origin} {text}" if prepend_origin else text
     if not additions:
-        return text
-    return f"{text.rstrip('. ')}. {'. '.join(additions)}."
+        return out_text
+    return f"{out_text.rstrip('. ')}. {'. '.join(additions)}."
 
 
 def _extract_questions(reply_text: str) -> list[str]:

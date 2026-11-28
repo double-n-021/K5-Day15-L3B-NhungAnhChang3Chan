@@ -10,7 +10,12 @@ interface RouteArchiveShape {
 const ARCHIVE = routesArchive as unknown as RouteArchiveShape;
 
 export function getCachedRoute(fromId: string, toId: string): RouteGeometry | null {
-  return ARCHIVE.routes[`${fromId}__${toId}`] ?? null;
+  const raw = ARCHIVE.routes[`${fromId}__${toId}`] ?? null;
+  if (!raw) return null;
+  return {
+    ...raw,
+    durationSeconds: calibrateHanoiDurationSeconds(raw.distanceMeters, raw.durationSeconds),
+  };
 }
 
 export function getAllCachedRoutes(): Record<string, RouteGeometry> {
@@ -264,7 +269,14 @@ export async function fetchLiveOsrmRoute(params: {
 }): Promise<RouteGeometry> {
   const { fromId, toId, originCoord, destCoord, destinationName } = params;
   const cached = getCachedRoute(fromId, toId);
-  if (cached) return cached;
+  if (
+    cached &&
+    cached.coordinates.length >= 2 &&
+    haversineDistanceMeters(originCoord, cached.coordinates[0]) <= 300 &&
+    haversineDistanceMeters(destCoord, cached.coordinates[cached.coordinates.length - 1]) <= 300
+  ) {
+    return cached;
+  }
 
   const cacheKey = `${fromId}__${toId}__${originCoord[0].toFixed(4)},${originCoord[1].toFixed(4)}__${destCoord[0].toFixed(4)},${destCoord[1].toFixed(4)}`;
   const liveCached = LIVE_ROUTE_CACHE.get(cacheKey);
