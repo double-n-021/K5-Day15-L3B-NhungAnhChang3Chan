@@ -96,6 +96,37 @@ def road_km(lat1, lon1, lat2, lon2):
     return _haversine(lat1, lon1, lat2, lon2) * ROAD_FACTOR
 
 
+def _is_hanoi_rush(hour: float = None, weekday: int = None) -> bool:
+    if hour is None or weekday is None:
+        now = time.localtime()
+        hour = now.tm_hour + now.tm_min / 60.0 if hour is None else hour
+        weekday = now.tm_wday if weekday is None else weekday
+    if weekday == 6:
+        return False
+    h = hour % 24.0
+    return (7.5 <= h < 9.25) or (17.0 <= h < 19.75)
+
+
+def hanoi_drive_minutes(km: float, osrm_freeflow_min: int = None, hour: float = None, weekday: int = None) -> int:
+    """Hiệu chỉnh thời gian lái thực tế nội thành Hà Nội (OSRM mặc định tính free-flow ~55km/h không đèn đỏ/tắc đường)."""
+    rush = _is_hanoi_rush(hour, weekday)
+    avg_kmh = 17.5 if rush else 24.5
+    urban_min = (km / avg_kmh) * 60.0
+    if osrm_freeflow_min is not None:
+        mult = 2.3 if rush else 1.95
+        urban_min = max(urban_min, osrm_freeflow_min * mult)
+    return max(2, int(round(urban_min)))
+
+
+def trip_road_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Khoảng cách đường bộ cho chặng origin -> dest: dùng OSRM thật khi USE_LIVE_OSRM=True, ngược lại Haversine*1.3."""
+    if USE_LIVE_OSRM:
+        res = osrm_batch_road_km(lat1, lon1, [("dest", lat2, lon2)])
+        if "dest" in res:
+            return res["dest"][0]
+    return road_km(lat1, lon1, lat2, lon2)
+
+
 def osrm_batch_road_km(origin_lat: float, origin_lon: float, targets: list, timeout: float = 4.0) -> dict:
     """Trace khoảng cách & thời gian lái đường bộ thực tế bằng 1 lần gọi OSRM Table API (miễn phí, không cần key).
     targets: [(id, lat, lon), ...]. Trả về {id: (road_km, drive_min)}. Lỗi mạng -> trả {} để fallback."""
@@ -121,7 +152,8 @@ def osrm_batch_road_km(origin_lat: float, origin_lon: float, targets: list, time
         for idx, (tid, _, _) in enumerate(targets):
             if idx < len(dists) and dists[idx] is not None:
                 km = round(float(dists[idx]) / 1000.0, 2)
-                mins = max(1, int(round(float(durs[idx]) / 60.0))) if (idx < len(durs) and durs[idx] is not None) else None
+                raw_min = int(round(float(durs[idx]) / 60.0)) if (idx < len(durs) and durs[idx] is not None) else None
+                mins = hanoi_drive_minutes(km, raw_min)
                 out[tid] = (km, mins)
         if len(_OSRM_CACHE) > 256:
             _OSRM_CACHE.clear()

@@ -242,6 +242,18 @@ export function buildDirectRoute(
   };
 }
 
+/** Calibrate free-flow OSRM duration to real Hanoi urban driving time (accounting for traffic lights & congestion). */
+export function calibrateHanoiDurationSeconds(distanceMeters: number, rawOsrmSeconds: number): number {
+  const now = new Date();
+  const wd = now.getDay(); // 0 = Sun
+  const h = now.getHours() + now.getMinutes() / 60;
+  const isRush = wd !== 0 && ((h >= 7.5 && h < 9.25) || (h >= 17.0 && h < 19.75));
+  const avgSpeedMps = isRush ? 17.5 / 3.6 : 24.5 / 3.6;
+  const urbanSec = distanceMeters / avgSpeedMps;
+  const scaledOsrm = rawOsrmSeconds * (isRush ? 2.3 : 1.95);
+  return Math.max(120, Math.round(Math.max(urbanSec, scaledOsrm)));
+}
+
 /** Fetches a live turn-by-turn OSRM route, falling back gracefully to buildDirectRoute on timeout/error. */
 export async function fetchLiveOsrmRoute(params: {
   fromId: string;
@@ -286,12 +298,14 @@ export async function fetchLiveOsrmRoute(params: {
         ? rawSteps.map((st, idx) => translateOsrmManeuver(st, idx))
         : fallback.steps;
 
+    const realDistMeters = Math.max(50, Math.round(Number(firstRoute.distance ?? fallback.distanceMeters)));
+    const rawDurSec = Math.max(60, Math.round(Number(firstRoute.duration ?? fallback.durationSeconds)));
     const route: RouteGeometry = {
       id: `osrm__${fromId}__${toId}`,
       fromId,
       toId,
-      distanceMeters: Math.max(50, Math.round(Number(firstRoute.distance ?? fallback.distanceMeters))),
-      durationSeconds: Math.max(60, Math.round(Number(firstRoute.duration ?? fallback.durationSeconds))),
+      distanceMeters: realDistMeters,
+      durationSeconds: calibrateHanoiDurationSeconds(realDistMeters, rawDurSec),
       coordinates: coords.map((pt: any) => [Number(pt[0]), Number(pt[1])] as [number, number]),
       steps,
     };
