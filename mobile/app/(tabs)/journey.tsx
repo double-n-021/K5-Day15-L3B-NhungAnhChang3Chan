@@ -156,6 +156,7 @@ export default function JourneyScreen() {
   const [micPermissionBlocked, setMicPermissionBlocked] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [showFullReply, setShowFullReply] = useState(false);
   const lastVoiceTriggerRef = useRef(0);
   const fullHeightRef = useRef(0);
   const currentHeightRef = useRef(0);
@@ -210,6 +211,10 @@ export default function JourneyScreen() {
   }, []);
 
   const activeOption = proposedOptions[activeOptionIndex] ?? null;
+
+  useEffect(() => {
+    setShowFullReply(false);
+  }, [lastApiResponse]);
 
   const submitNaturalText = useCallback(
     async (textToRun: string) => {
@@ -682,8 +687,8 @@ export default function JourneyScreen() {
               </Animated.View>
             )}
 
-            {/* AI Full Reply Card */}
-            {!busyThinking && apiSourceMode === 'live' && lastApiResponse && (
+            {/* AI Full Reply Card — expanded immediately ONLY when there is no glanceable station card */}
+            {!busyThinking && apiSourceMode === 'live' && lastApiResponse && !activeOption && (
               <Animated.View entering={FadeInDown.duration(200)} style={styles.liveReplyCard}>
                 <View style={styles.liveReplyHeader}>
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
@@ -727,6 +732,27 @@ export default function JourneyScreen() {
                   </Pressable>
                 )}
               </Animated.View>
+            )}
+
+            {/* Compact MAPPO & safety pill above the glanceable station card */}
+            {!busyThinking && activeOption && apiSourceMode === 'live' && lastApiResponse && (
+              <>
+                {lastApiResponse.mappo_strategy && (
+                  <View style={styles.mappoPill}>
+                    <ShieldCheck size={14} color={COLORS.energyGreen} />
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={1}>
+                      MAPPO: {lastApiResponse.mappo_strategy.strategy_vi}
+                    </Text>
+                  </View>
+                )}
+                {lastApiResponse.guardrails?.excluded_note && (
+                  <View style={styles.offlineBanner}>
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, flex: 1 }]} numberOfLines={2}>
+                      {lastApiResponse.guardrails.excluded_note}
+                    </Text>
+                  </View>
+                )}
+              </>
             )}
 
             {/* Front-door partial_prompt quick Yes/No reply chips */}
@@ -1005,6 +1031,30 @@ export default function JourneyScreen() {
                   </Pressable>
                 )}
               </Animated.View>
+            )}
+
+            {/* Collapsible verbatim AI analysis below the glanceable proposal card */}
+            {!busyThinking && activeOption && apiSourceMode === 'live' && lastApiResponse && (
+              <View style={{ gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setShowFullReply((v) => !v);
+                  }}
+                  style={styles.detailToggleBtn}
+                >
+                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '600' }]}>
+                    {showFullReply
+                      ? 'Thu gọn phân tích AI ▴'
+                      : 'Xem chi tiết phân tích AI (Top 3 & luật an toàn) ▾'}
+                  </Text>
+                </Pressable>
+                {showFullReply && (
+                  <Animated.View entering={FadeInDown.duration(160)} style={styles.liveReplyCard}>
+                    <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
+                  </Animated.View>
+                )}
+              </View>
             )}
           </ScrollView>
 
@@ -1551,5 +1601,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  detailToggleBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 });
