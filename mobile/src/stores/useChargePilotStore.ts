@@ -127,9 +127,10 @@ interface ChargePilotState {
   sendPromptToApi: (prompt: string) => Promise<void>;
   confirmGreenToken: (token: string, label?: string) => Promise<boolean>;
   resetApiSession: () => Promise<void>;
-  acceptProposedItinerary: () => void;
+  acceptProposedItinerary: (confirmReward?: boolean) => void;
+  confirmAcceptedItineraryReward: () => Promise<boolean>;
   declineProposedItinerary: () => void;
-  requestAlternativeOption: () => void;
+  requestAlternativeOption: (index?: number) => void;
   triggerVoiceAssistant: () => void;
   selectStation: (stationId: string) => void;
   toggleScenario: (scenarioId: WhatIfScenarioId) => void;
@@ -722,48 +723,41 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     });
   },
 
-  acceptProposedItinerary: () => {
-    const {
-      proposedOptions,
-      activeOptionIndex,
-      selectedStationId,
-      greenPoints,
-      creditedOptionIds,
-      rewardHistory,
-    } = get();
+  acceptProposedItinerary: (confirmReward = true) => {
+    const { proposedOptions, activeOptionIndex, selectedStationId } = get();
     const active = proposedOptions[activeOptionIndex];
-    const pts = active?.reward.points ?? 0;
-
-    if (active?.isLiveApi) {
-      set({
-        itineraryStatus: 'accepted',
-        selectedStationId: active.hanoiStationId ?? active.apiStationId ?? selectedStationId,
-      });
-      if (active.confirmToken && pts > 0) {
-        void get().confirmGreenToken(active.confirmToken, active.stationName);
-      }
-      return;
-    }
-
-    const shouldCredit = active && pts > 0 && !creditedOptionIds.includes(active.id);
-
+    if (!active) return;
     set({
       itineraryStatus: 'accepted',
-      selectedStationId: active?.hanoiStationId ?? selectedStationId,
-      greenPoints: shouldCredit ? greenPoints + pts : greenPoints,
-      creditedOptionIds: shouldCredit ? [...creditedOptionIds, active.id] : creditedOptionIds,
-      rewardHistory: shouldCredit
-        ? [
-            {
-              id: active.id,
-              title: `${active.reward.label} · ${active.stationName}`,
-              points: pts,
-              time: 'Vừa nhận',
-            },
-            ...rewardHistory,
-          ]
-        : rewardHistory,
+      selectedStationId: active.hanoiStationId ?? active.apiStationId ?? selectedStationId,
     });
+    if (confirmReward) void get().confirmAcceptedItineraryReward();
+  },
+
+  confirmAcceptedItineraryReward: async () => {
+    const {
+      proposedOptions, activeOptionIndex, itineraryStatus, greenPoints, creditedOptionIds, rewardHistory,
+    } = get();
+    const active = proposedOptions[activeOptionIndex];
+    if (itineraryStatus !== 'accepted' || !active || active.reward.points <= 0) return false;
+    if (active.isLiveApi) {
+      return active.confirmToken ? get().confirmGreenToken(active.confirmToken, active.stationName) : false;
+    }
+    if (creditedOptionIds.includes(active.id)) return true;
+    set({
+      greenPoints: greenPoints + active.reward.points,
+      creditedOptionIds: [...creditedOptionIds, active.id],
+      rewardHistory: [
+        {
+          id: active.id,
+          title: `${active.reward.label} · ${active.stationName}`,
+          points: active.reward.points,
+          time: 'Vừa nhận',
+        },
+        ...rewardHistory,
+      ],
+    });
+    return true;
   },
 
   declineProposedItinerary: () => {
@@ -772,15 +766,16 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     });
   },
 
-  requestAlternativeOption: () => {
+  requestAlternativeOption: (index) => {
     const { proposedOptions, activeOptionIndex, selectedStationId } = get();
     if (proposedOptions.length === 0) return;
-    const nextIdx = (activeOptionIndex + 1) % proposedOptions.length;
+    const nextIdx = index ?? (activeOptionIndex + 1) % proposedOptions.length;
     const nextOpt = proposedOptions[nextIdx];
+    if (!nextOpt || nextIdx === activeOptionIndex) return;
     set({
       activeOptionIndex: nextIdx,
       itineraryStatus: 'pending',
-      selectedStationId: nextOpt?.hanoiStationId ?? nextOpt?.apiStationId ?? selectedStationId,
+      selectedStationId: nextOpt.hanoiStationId ?? nextOpt.apiStationId ?? selectedStationId,
     });
   },
 

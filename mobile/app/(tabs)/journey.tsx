@@ -1,1689 +1,624 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Keyboard,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { requireOptionalNativeModule } from 'expo';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import {
-  BatteryCharging,
-  CalendarClock,
-  Check,
-  Clock,
-  ExternalLink,
-  Flag,
-  Info,
-  Mic,
-  MicOff,
-  Navigation,
-  RefreshCw,
-  RotateCcw,
-  Send,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react-native';
-import { MascotAssistant } from '@/components/mascot/MascotAssistant';
+import { Check, Clock, Mic, MicOff, Navigation, RotateCcw, Send, X } from 'lucide-react-native';
+import Animated, { LinearTransition, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import { JourneyProposals } from '@/components/journey/JourneyProposals';
+import { MascotAssistant, MOOD_ACCENT, type AssistantMood } from '@/components/mascot/MascotAssistant';
 import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { MarkdownText, stripMarkdown } from '@/components/shared/MarkdownText';
 import { CUSTOM_ICONS } from '@/data/customIcons';
-import { formatVnd } from '@/services/decisionEngine';
-import {
-  cancelVietnameseSpeech,
-  ensureMicrophonePermission,
-  startVietnameseSpeech,
-  stopVietnameseSpeech,
-} from '@/services/voiceRecognition';
+import { cancelVietnameseSpeech, ensureMicrophonePermission, startVietnameseSpeech, stopVietnameseSpeech } from '@/services/voiceRecognition';
 import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
-import type { JourneyStageType, MascotMood, MissingInfoField } from '@/types';
+import type { ApiChatResponse, MissingInfoField, ProposedItineraryOption } from '@/types';
 
-const VOICE_SAMPLES = [
-  {
-    id: 'hoan-kiem-van-mieu',
-    label: '“VF e34 còn 35%, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.”',
-    prompt: 'VF e34 còn 35%, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.',
-  },
-  {
-    id: 'evo200-green-sunday',
-    label: '“Xe máy điện Evo200 còn 15%, đang ở Thanh Xuân lúc 11:30 Chủ nhật, sạc ở đâu có điểm xanh?”',
-    prompt: 'Xe máy điện Evo200 còn 15%, đang ở Thanh Xuân lúc 11:30 Chủ nhật, sạc ở đâu có điểm xanh?',
-  },
-  {
-    id: 'rescue-10pct',
-    label: '“Pin còn 10%, VF e34, đang ở Phố Cổ lúc 18:00 thứ Tư” (cứu pin <15%)',
-    prompt: 'Pin còn 10%, VF e34, đang ở Phố Cổ lúc 18:00 thứ Tư',
-  },
-  {
-    id: 'guardrail-da-nang',
-    label: '“Pin 40%, đi Đà Nẵng sạc ở đâu?” (Ngoài khu vực Hà Nội)',
-    prompt: 'Pin 40%, đi Đà Nẵng sạc ở đâu?',
-  },
+const SAMPLES = [
+  { label: 'Trạm gần nhất', prompt: 'Tìm trạm sạc gần nhất' },
+  { label: 'Đi Văn Miếu', prompt: 'VF e34 còn 35%, đang ở Hồ Hoàn Kiếm lúc 14:00 thứ Bảy, 16:30 đi Văn Miếu.' },
+  { label: 'Sạc trưa nắng', prompt: 'Xe máy điện Evo200 còn 15%, đang ở Thanh Xuân lúc 11:30 Chủ nhật, sạc ở đâu có điểm xanh?' },
 ];
 
-// API etaText is the charge window ("11:42–12:30") or "Sạc ngay"; offline mode gives an arrival time.
-function isChargeWindowText(text: string): boolean {
-  return /\d{1,2}:\d{2}\s*[–-]/.test(text) || text === 'Sạc ngay';
+const QUICK_REPLIES: Record<MissingInfoField | 'origin' | 'vehicle', { label: string; text: string }[]> = {
+  battery: [10, 20, 30, 50].map((pct) => ({ label: `${pct}%`, text: `Pin còn ${pct}%` })),
+  destination: [{ label: 'Hồ Gươm', text: 'Đi Hồ Gươm' }, { label: 'Văn Miếu', text: 'Đi Văn Miếu' }],
+  origin: [{ label: 'Cầu Giấy', text: 'Đang ở Cầu Giấy' }, { label: 'Thanh Xuân', text: 'Đang ở Thanh Xuân' }],
+  time: [{ label: '8:00', text: 'Đi lúc 8:00' }, { label: '12:00', text: 'Đi lúc 12:00' }, { label: '14:30', text: 'Đi lúc 14:30' }],
+  vehicle: [{ label: 'VF e34', text: 'Xe VF e34' }, { label: 'Evo200', text: 'Xe máy điện Evo200' }],
+};
+
+const FIELD_LABELS = { battery: '% pin', destination: 'điểm đến', origin: 'vị trí', time: 'giờ đi', vehicle: 'mẫu xe' };
+type ClarificationField = keyof typeof FIELD_LABELS;
+
+function getAskedFields(response: ApiChatResponse | null, missing: MissingInfoField[]): ClarificationField[] {
+  if (missing.length) return missing;
+  if (response?.intent_state !== 'ask_back') return [];
+  const question = (response.follow_up_questions.join(' ') || response.tts_summary || response.reply_text).toLowerCase();
+  const fields: ClarificationField[] = [];
+  if (/pin|phần trăm|%/.test(question) && response.battery.current_pct == null) fields.push('battery');
+  if (/vị trí|đang ở|địa chỉ|khu vực|xuất phát/.test(question)) fields.push('origin');
+  if (/điểm đến|đến đâu|đi đâu|điểm hẹn/.test(question)) fields.push('destination');
+  if (/giờ đi|lúc mấy giờ|thời gian|giờ hẹn|khi nào/.test(question)) fields.push('time');
+  if (/mẫu xe|loại xe|xe gì|dòng xe/.test(question)) fields.push('vehicle');
+  return fields;
 }
 
-const QUICK_FILL_CHIPS: Record<
-  MissingInfoField,
-  { chips: { label: string; append: string }[] }
-> = {
-  destination: {
-    chips: [
-      { label: 'Ở Cầu Giấy', append: ' đang ở Cầu Giấy' },
-      { label: 'Ở Hồ Hoàn Kiếm', append: ' đang ở Hồ Hoàn Kiếm' },
-      { label: 'Đi Văn Miếu', append: ' đi Văn Miếu' },
-    ],
-  },
-  battery: {
-    chips: [
-      { label: '18% pin', append: ', còn 18% pin' },
-      { label: '22% pin', append: ', còn 22% pin' },
-      { label: '35% pin', append: ', còn 35% pin' },
-    ],
-  },
-  time: {
-    chips: [
-      { label: 'Trưa nắng 12h (+45đ)', append: ' lúc trưa nắng 12h' },
-      { label: '8h sáng', append: ' lúc 8h sáng' },
-      { label: 'Trước 14h30', append: ', 14h30 phải có mặt' },
-    ],
-  },
-};
+function briefReply(text: string, rescue = false): string {
+  const clean = stripMarkdown(text).replace(/\s+/g, ' ').trim();
+  const sentences = clean.split(/(?<=[.!?])\s+/);
+  // The rescue banner already states that the battery is low. Keep the action when the API sends three sentences.
+  return (rescue && sentences.length > 2 ? sentences.slice(1, 3) : sentences.slice(0, 2)).join(' ').trim();
+}
 
-const INTENT_LABELS: Record<string, string> = {
-  recommendation: 'Đề xuất trạm sạc',
-  rescue: 'Cứu pin khẩn cấp',
-  home_charging: 'Sạc tại nhà',
-  ask_back: 'Cần bổ sung thông tin',
-  refusal: 'Ngoài phạm vi hỗ trợ',
-  chat: 'Trò chuyện',
-  partial_prompt: 'Xác nhận tìm trạm',
-};
+function optionSummary(option: ProposedItineraryOption): string {
+  const status = option.statusLabel?.trim().replace(/[.!?]+$/, '');
+  const detail = status || (option.waitMin > 0 ? `dự kiến chờ ${option.waitMin} phút` : `sạc khoảng ${option.chargeMin} phút`);
+  return `${option.stationName} cách ${option.distanceKm.toLocaleString('vi-VN')} ki-lô-mét, ${detail}.`;
+}
 
-const STAGE_ICON_COLOR: Record<JourneyStageType, string> = {
-  departure: COLORS.textSecondary,
-  driving: COLORS.navBlue,
-  waiting: COLORS.warningAmber,
-  charging: COLORS.energyGreen,
-  appointment: '#A78BFA',
-  destination: COLORS.energyGreen,
-};
+function suggestedDistance(option: ProposedItineraryOption, response: ApiChatResponse | null): number {
+  // Use the same starting point as the assistant summary. Navigation separately uses live GPS routing.
+  return response?.stations.find((station) => station.id === option.apiStationId)?.road_km ?? option.distanceKm;
+}
+
+function responseSummary(response: ApiChatResponse | null, option?: ProposedItineraryOption, index = 0): string {
+  if (response?.intent_state === 'refusal') {
+    const reason = briefReply(response.guardrails.excluded_note || response.tts_summary || response.reply_text)
+      .split(/(?<=[.!?])\s+/)[0];
+    return reason
+      ? `${reason.replace(/[.!?]+$/, '')}. Bạn có thể hỏi mình tìm trạm sạc cho xe điện.`
+      : 'Bạn có thể hỏi mình tìm trạm sạc cho xe điện.';
+  }
+  if (response?.intent_state === 'ask_back' || response?.intent_state === 'partial_prompt') {
+    return briefReply(response.follow_up_questions.join(' ') || response.tts_summary);
+  }
+  if (option && (index > 0 || !response?.tts_summary)) {
+    return optionSummary({ ...option, distanceKm: suggestedDistance(option, response) });
+  }
+  return briefReply(response?.tts_summary || response?.reply_text || '', response?.intent_state === 'rescue');
+}
+
+const speechAvailable = Platform.OS === 'web'
+  ? typeof globalThis.speechSynthesis !== 'undefined'
+  : Boolean(requireOptionalNativeModule('ExpoSpeech'));
+
+async function speakSummary(text: string) {
+  if (!speechAvailable || !text) return;
+  const speech = await import('expo-speech');
+  await speech.stop();
+  speech.speak(text, { language: 'vi-VN' });
+}
+
+async function stopSummary() {
+  if (speechAvailable) await (await import('expo-speech')).stop();
+}
 
 export default function JourneyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const rootRef = useRef<React.ComponentRef<typeof View>>(null);
-  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const { width, height, fontScale } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
+  const audioLevel = useSharedValue(0);
+  const lastVoiceTrigger = useRef(0);
+  const voiceDraft = useRef(false);
+  const voiceAnswer = useRef(false);
+  const requestInFlight = useRef(false);
+  const focused = useRef(false);
 
   const {
-    vehicleId,
-    effectiveInput,
-    effectiveWeather,
-    parsedRequest,
-    proposedOptions,
-    activeOptionIndex,
-    itineraryStatus,
-    greenPoints,
-    voiceDrawerTrigger,
-    pendingPrompt,
-    consumePendingPrompt,
-    setVehicleId,
-    sendPromptToApi,
-    confirmGreenToken,
-    resetApiSession,
-    acceptProposedItinerary,
-    declineProposedItinerary,
-    requestAlternativeOption,
-    recommendation,
-    apiLoading,
-    apiError,
-    apiSourceMode,
-    lastApiResponse,
-    confirmedTokens,
+    effectiveInput, parsedRequest, proposedOptions, activeOptionIndex, itineraryStatus, greenPoints,
+    voiceDrawerTrigger, pendingPrompt, consumePendingPrompt, setVehicleId, sendPromptToApi,
+    confirmGreenToken, resetApiSession, acceptProposedItinerary, confirmAcceptedItineraryReward,
+    declineProposedItinerary, requestAlternativeOption, recommendation, apiLoading, apiError,
+    apiSourceMode, lastApiResponse, confirmedTokens, creditedOptionIds,
   } = useChargePilotStore();
 
-  const [mode, setMode] = useState<'chat' | 'timeline'>('chat');
-  const [promptText, setPromptText] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [micPermissionBlocked, setMicPermissionBlocked] = useState(false);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const [showFullReply, setShowFullReply] = useState(false);
-  const lastVoiceTriggerRef = useRef(0);
-  const fullHeightRef = useRef(0);
-  const currentHeightRef = useRef(0);
-  const lastKbHeightRef = useRef(0);
-  const isKeyboardOpenRef = useRef(false);
+  const [prompt, setPrompt] = useState('');
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [sheet, setSheet] = useState<'reply' | 'timeline' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [rewardBusy, setRewardBusy] = useState(false);
+  const [rewardError, setRewardError] = useState(false);
 
-  // Hybrid Android IME listener: skips paddingBottom if OS adjustResize already shrank view,
-  // and applies exact keyboard height if edgeToEdge prevents resizing.
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    let syncTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      isKeyboardOpenRef.current = true;
-      setIsKeyboardOpen(true);
-      const kbHeight = Math.max(0, Math.round(e.endCoordinates?.height ?? 0));
-      lastKbHeightRef.current = kbHeight;
-
-      const applyInset = () => {
-        const shrink =
-          fullHeightRef.current > 0 && currentHeightRef.current > 0
-            ? fullHeightRef.current - currentHeightRef.current
-            : 0;
-        if (shrink >= 80) {
-          setKeyboardOffset(0);
-        } else {
-          setKeyboardOffset(kbHeight);
-        }
-      };
-
-      applyInset();
-      if (syncTimer) clearTimeout(syncTimer);
-      syncTimer = setTimeout(() => {
-        applyInset();
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 90);
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      if (syncTimer) clearTimeout(syncTimer);
-      isKeyboardOpenRef.current = false;
-      lastKbHeightRef.current = 0;
-      setIsKeyboardOpen(false);
-      setKeyboardOffset(0);
-    });
-
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
     return () => {
-      if (syncTimer) clearTimeout(syncTimer);
-      showSub.remove();
-      hideSub.remove();
+      focused.current = false;
+      void stopSummary().catch(() => {});
+    };
+  }, []));
+
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+      void cancelVietnameseSpeech();
     };
   }, []);
 
-  const activeOption = proposedOptions[activeOptionIndex] ?? null;
+  const submit = useCallback(async (value: string, fromVoice = false) => {
+    const text = value.trim();
+    if (!text || requestInFlight.current || useChargePilotStore.getState().apiLoading) return;
+    requestInFlight.current = true;
+    setSubmitting(true);
+    voiceDraft.current = false;
+    voiceAnswer.current = fromVoice;
+    Keyboard.dismiss();
+    void stopSummary().catch(() => {});
+    void cancelVietnameseSpeech();
+    setListening(false);
+    setTranscript('');
+    setVoiceError('');
+    setRewardError(false);
+    setSheet(null);
+    setPrompt('');
+    try {
+      const lower = text.toLowerCase();
+      if (/evo|xe máy/.test(lower)) setVehicleId('vinfast_evo200');
+      else if (/e34|ô tô/.test(lower)) setVehicleId('vfe34');
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      await sendPromptToApi(text);
+      const result = useChargePilotStore.getState();
+      const summary = responseSummary(result.lastApiResponse, result.proposedOptions[0])
+        || (result.parsedRequest?.missingFields.length
+          ? `Mình cần thêm ${result.parsedRequest.missingFields.map((field) => FIELD_LABELS[field]).join(', ')}.`
+          : 'Chưa tìm được trạm phù hợp từ dữ liệu offline.');
+      if (fromVoice && focused.current) void speakSummary(summary).catch(() => {});
+    } finally {
+      requestInFlight.current = false;
+      setSubmitting(false);
+    }
+  }, [sendPromptToApi, setVehicleId]);
 
-  useEffect(() => {
-    setShowFullReply(false);
-  }, [lastApiResponse]);
+  const startMic = useCallback(async () => {
+    if (useChargePilotStore.getState().apiLoading) return;
+    Keyboard.dismiss();
+    await stopSummary().catch(() => {});
+    setVoiceError('');
+    setMicBlocked(false);
+    setTranscript('');
+    audioLevel.set(0);
 
-  const submitNaturalText = useCallback(
-    async (textToRun: string) => {
-      const trimmed = textToRun.trim();
-      if (!trimmed || isThinking || apiLoading) return;
-
-      Keyboard.dismiss();
-      cancelVietnameseSpeech().catch(() => {});
-      setIsListening(false);
-      setLiveTranscript('');
-      setVoiceError(null);
-      setMicPermissionBlocked(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-
-      const lower = trimmed.toLowerCase();
-      if (lower.includes('evo') || lower.includes('xe máy')) {
-        setVehicleId('vinfast_evo200');
-      } else if (lower.includes('e34') || lower.includes('ô tô')) {
-        setVehicleId('vfe34');
-      }
-
-      setIsThinking(true);
-      setPromptText('');
-      try {
-        await sendPromptToApi(trimmed);
-        const stateAfter = useChargePilotStore.getState();
-        if (
-          stateAfter.apiSourceMode === 'offline_fallback' &&
-          stateAfter.parsedRequest &&
-          !stateAfter.parsedRequest.isComplete
-        ) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-        } else {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        }
-        setTimeout(() => {
-          scrollRef.current?.scrollToEnd({ animated: true });
-        }, 160);
-      } finally {
-        setIsThinking(false);
-      }
-    },
-    [apiLoading, isThinking, sendPromptToApi, setVehicleId]
-  );
-
-  const startRealVoiceListening = useCallback(async () => {
-    setVoiceError(null);
-    setMicPermissionBlocked(false);
-    setLiveTranscript('');
-
-    const permStatus = await ensureMicrophonePermission();
-    if (permStatus === 'never_ask_again') {
-      setIsListening(false);
-      setMicPermissionBlocked(true);
-      setVoiceError(
-        'Quyền Micro đang bị tắt. Bấm nút bên dưới để mở Cài đặt và bật quyền Microphone cho ChargePilot AI.'
-      );
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    const permission = await ensureMicrophonePermission();
+    if (permission !== 'granted') {
+      setMicBlocked(permission === 'never_ask_again');
+      setVoiceError(permission === 'unavailable' ? 'Thiết bị chưa hỗ trợ nhận giọng nói.' : 'Hãy cấp quyền micro hoặc gõ yêu cầu.');
       return;
     }
 
-    if (permStatus === 'denied') {
-      setIsListening(false);
-      setVoiceError(
-        'Bạn chưa cấp quyền Microphone nên mình chưa nghe được. Bấm lại nút Mic và chọn Cho phép nhé.'
-      );
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      return;
-    }
-
-    setIsListening(true);
+    setListening(true);
     await startVietnameseSpeech({
-      onStart: () => {
-        setIsListening(true);
-        setVoiceError(null);
+      onRms: (rms) => { audioLevel.set(withTiming(Math.min(1, Math.max(0, (rms + 2) / 12)), { duration: 100 })); },
+      onPartial: (text) => {
+        voiceDraft.current = true;
+        setTranscript(text);
+        setPrompt(text);
       },
-      onPartial: (partialText) => {
-        setLiveTranscript(partialText);
-        setPromptText(partialText);
+      onResult: (text) => {
+        voiceDraft.current = true;
+        setTranscript(text);
+        setPrompt(text);
+        setListening(false);
       },
-      onResult: (finalText) => {
-        setIsListening(false);
-        setLiveTranscript('');
-        setPromptText(finalText);
-        submitNaturalText(finalText);
-      },
-      onError: (msg) => {
-        setIsListening(false);
-        setLiveTranscript('');
-        setVoiceError(msg);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      },
-      onEnd: () => {
-        setIsListening(false);
-      },
+      onError: (message) => { setListening(false); setVoiceError(message); },
+      onEnd: () => { setListening(false); audioLevel.set(0); },
     });
-  }, [submitNaturalText]);
+  }, [audioLevel]);
 
   useEffect(() => {
-    if (voiceDrawerTrigger > 0 && voiceDrawerTrigger !== lastVoiceTriggerRef.current) {
-      lastVoiceTriggerRef.current = voiceDrawerTrigger;
-      setMode('chat');
-      startRealVoiceListening().catch(() => {});
-    }
-  }, [voiceDrawerTrigger, startRealVoiceListening]);
+    if (voiceDrawerTrigger <= lastVoiceTrigger.current) return;
+    lastVoiceTrigger.current = voiceDrawerTrigger;
+    void startMic().catch(() => {});
+  }, [voiceDrawerTrigger, startMic]);
 
-  // Prompts queued from Home (text box / "Tìm trạm gần nhất") run through the same submit path.
   useEffect(() => {
-    if (!pendingPrompt || isThinking || apiLoading) return;
+    if (!pendingPrompt || apiLoading || submitting || resetting || requestInFlight.current) return;
     const queued = consumePendingPrompt();
-    if (queued) {
-      setMode('chat');
-      submitNaturalText(queued).catch(() => {});
-    }
-  }, [pendingPrompt, isThinking, apiLoading, consumePendingPrompt, submitNaturalText]);
+    if (queued) void submit(queued);
+  }, [pendingPrompt, apiLoading, submitting, resetting, consumePendingPrompt, submit]);
 
-  useEffect(() => {
-    return () => {
-      cancelVietnameseSpeech().catch(() => {});
-    };
-  }, []);
+  const option = proposedOptions[activeOptionIndex];
+  const intent = lastApiResponse?.intent_state;
+  const accepted = itineraryStatus === 'accepted' && Boolean(option);
+  const offline = apiSourceMode === 'offline_fallback' && Boolean(parsedRequest);
+  const rescue = intent === 'rescue' || (offline && Boolean(option) && effectiveInput.batteryPct < 15);
+  const askedFields = getAskedFields(lastApiResponse, parsedRequest?.missingFields ?? []);
+  const clarify = intent === 'ask_back' || intent === 'partial_prompt' || askedFields.length > 0;
+  const reviewVoice = Boolean(transcript && prompt.trim());
+  const composing = listening || keyboardOpen || reviewVoice;
+  const timeline = option?.timeline.length ? option.timeline : recommendation.timeline;
+  const replyText = lastApiResponse?.reply_text || option?.fullReplyText || option?.whyThisOption || '';
+  const guardrail = lastApiResponse?.guardrails.excluded_note;
+  const hasDetails = Boolean(replyText || guardrail || proposedOptions.length || lastApiResponse?.follow_up_questions.length);
+  const busy = apiLoading || submitting || resetting;
 
-  const handleToggleMic = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (isListening) {
-      stopVietnameseSpeech().catch(() => {});
-      setIsListening(false);
-      return;
-    }
-    startRealVoiceListening().catch(() => {});
-  };
-
-  const handleQuickAppend = (appendText: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    const updated = (promptText.trim() + appendText).trim();
-    setPromptText(updated);
-    submitNaturalText(updated);
-  };
-
-  // Compute Mascot mood & speech
-  const busyThinking = isThinking || apiLoading;
-  let mascotMood: MascotMood = 'idle';
-  let mascotBadge = 'TRỢ LÝ CHARGEPILOT';
-  let mascotSpeech =
-    'Chào bạn! Hãy bấm Mic và nói tự nhiên: bạn muốn đi đâu, mấy giờ và xe còn bao nhiêu % pin?';
-
-  if (isListening) {
-    mascotMood = 'listening';
-    mascotBadge = 'ĐANG LẮNG NGHE · MIC BẬT';
-    mascotSpeech = liveTranscript
-      ? `Đang nghe: “${liveTranscript}”`
-      : 'Mình đang nghe thật qua micro đây! Hãy nói tự nhiên: bạn muốn đi đâu, mấy giờ và xe còn bao nhiêu % pin?';
-  } else if (busyThinking) {
-    mascotMood = 'thinking';
-    mascotBadge = 'ĐANG TÍNH TOÁN (LIVE AI)';
-    mascotSpeech =
-      'Đợi mình một chút, mình đang gọi CHARGEPILOT AI kiểm tra trạm trống, % pin và khung giờ sạc an toàn...';
+  let mood: AssistantMood = 'idle';
+  let status = 'Chào bạn! Hỏi mình về trạm sạc nhé';
+  let summary = '';
+  if (busy) {
+    mood = 'thinking';
+    status = resetting ? 'Đang làm mới phiên…' : 'Đang tìm trạm phù hợp…';
+  } else if (composing) {
+    mood = 'listening';
+    status = listening ? 'Đang nghe…' : reviewVoice ? 'Kiểm tra rồi bấm gửi' : 'Đang nhập…';
+    summary = listening || reviewVoice ? prompt : '';
   } else if (voiceError) {
-    mascotMood = 'warning';
-    mascotBadge = 'MICROPHONE';
-    mascotSpeech = voiceError;
-  } else if (apiSourceMode === 'live' && lastApiResponse) {
-    const st = lastApiResponse.intent_state;
-    if (st === 'rescue') {
-      mascotMood = 'warning';
-      mascotBadge = 'CỨU PIN KHẨN CẤP (<15%)';
-    } else if (st === 'refusal') {
-      mascotMood = 'warning';
-      mascotBadge = 'NGOÀI PHẠM VI / AN TOÀN';
-    } else if (st === 'ask_back') {
-      mascotMood = 'warning';
-      mascotBadge = 'CẦN BỔ SUNG THÔNG TIN';
-    } else if (st === 'partial_prompt') {
-      mascotMood = 'idle';
-      mascotBadge = 'XÁC NHẬN TÌM TRẠM';
-    } else if (st === 'chat') {
-      mascotMood = 'happy';
-      mascotBadge = 'TRỢ LÝ CHARGEPILOT';
-    } else if (st === 'home_charging') {
-      mascotMood = 'happy';
-      mascotBadge = 'SẠC TẠI NHÀ';
-    } else {
-      mascotMood = 'happy';
-      mascotBadge = activeOption
-        ? itineraryStatus === 'accepted'
-          ? 'ĐÃ ÁP DỤNG LỊCH TRÌNH'
-          : `ĐỀ XUẤT ${activeOption.optionIndex + 1}/${activeOption.totalOptions}`
-        : 'TRỢ LÝ LIVE AI';
-    }
-    mascotSpeech = stripMarkdown(lastApiResponse.tts_summary || lastApiResponse.reply_text);
-  } else if (parsedRequest && !parsedRequest.isComplete) {
-    mascotMood = 'warning';
-    mascotBadge = 'CẦN BỔ SUNG THÔNG TIN';
-    const missingNames = parsedRequest.missingFields
-      .map((f) =>
-        f === 'destination' ? 'điểm đến' : f === 'battery' ? '% pin hiện tại' : 'giờ đi/giờ hẹn'
-      )
-      .join(' và ');
-    mascotSpeech = `Mình chưa rõ ${missingNames}. Bạn nói thêm hoặc chọn nhanh bên dưới để mình lên lịch chính xác nhé!`;
-  } else if (activeOption) {
-    mascotMood = 'happy';
-    mascotBadge =
-      itineraryStatus === 'accepted'
-        ? 'ĐÃ ÁP DỤNG LỊCH TRÌNH'
-        : `ĐỀ XUẤT ${activeOption.optionIndex + 1}/${activeOption.totalOptions}`;
-    mascotSpeech = activeOption.mascotSpeech;
+    mood = 'warning';
+    status = 'Chưa nhận được giọng nói';
+    summary = voiceError;
+  } else if (intent === 'refusal') {
+    mood = 'refusal';
+    status = 'Ngoài phạm vi hỗ trợ';
+    summary = responseSummary(lastApiResponse);
+  } else if (clarify) {
+    mood = 'warning';
+    status = askedFields.length
+      ? `Mình cần thêm: ${askedFields.map((field) => FIELD_LABELS[field]).join(', ')}`
+      : intent === 'partial_prompt' ? 'Bạn muốn mình tìm trạm?' : 'Mình cần thêm thông tin';
+    summary = responseSummary(lastApiResponse);
+  } else if (accepted) {
+    mood = 'happy';
+    status = 'Đã chốt lịch';
+    summary = option.stationName;
+  } else if (option || lastApiResponse || offline) {
+    mood = rescue ? 'rescue' : offline ? 'offline' : 'result';
+    status = rescue ? 'Pin dưới 15% — sạc ngay' : offline ? 'Mất kết nối — đang dùng dữ liệu offline' : 'Đề xuất cho bạn';
+    summary = responseSummary(lastApiResponse, option, activeOptionIndex);
+    if (!summary && offline) summary = 'Chưa tìm được trạm phù hợp từ dữ liệu offline.';
   }
 
-  const activeTimeline =
-    activeOption?.timeline ??
-    (itineraryStatus === 'accepted' ? recommendation.timeline : []);
+  const showingResult = !composing && !busy && !voiceError && !clarify
+    && intent !== 'refusal' && !accepted && Boolean(option);
+  const showAccepted = !composing && !busy && !voiceError && accepted;
+  const compact = showingResult || composing || mood === 'thinking' || (mood === 'rescue' && !option);
+  const stageSize = compact ? (composing ? 48 : 56) : showAccepted ? 96 : Math.min(152, height * 0.19);
+  const homeReward = intent === 'home_charging' && lastApiResponse?.green_reward.eligible
+    ? lastApiResponse.green_reward : null;
+  const rewardToken = showAccepted ? option?.confirmToken : homeReward?.confirm_token;
+  const rewardPoints = showAccepted && !rescue && (!option?.isLiveApi || rewardToken)
+    ? option?.reward.points ?? 0 : homeReward?.confirm_token ? homeReward.points : 0;
+  const credited = rewardToken ? confirmedTokens.includes(rewardToken) : !!option && creditedOptionIds.includes(option.id);
+  const canNavigate = option && ((!option.isIntercitySimulated && (option.hanoiStationId || option.apiStationId))
+    || (option.stationLat != null && option.stationLon != null));
 
-  const homeGreenToken =
-    apiSourceMode === 'live' &&
-    lastApiResponse?.intent_state === 'home_charging' &&
-    lastApiResponse.green_reward.eligible
-      ? lastApiResponse.green_reward.confirm_token
-      : null;
-  const isHomeTokenConfirmed = homeGreenToken ? confirmedTokens.includes(homeGreenToken) : false;
+  const selectOption = (index: number) => {
+    requestAlternativeOption(index);
+    void Haptics.selectionAsync().catch(() => {});
+    const next = proposedOptions[index];
+    if (voiceAnswer.current && focused.current && next) {
+      void speakSummary(responseSummary(lastApiResponse, next, index)).catch(() => {});
+    }
+  };
+
+  const claimReward = async () => {
+    if (rewardBusy || credited) return;
+    setRewardBusy(true);
+    setRewardError(false);
+    try {
+      const success = showAccepted ? await confirmAcceptedItineraryReward()
+        : rewardToken ? await confirmGreenToken(rewardToken, 'Sạc tại nhà ngoài cao điểm') : false;
+      setRewardError(!success);
+    } finally {
+      setRewardBusy(false);
+    }
+  };
+
+  const reset = async () => {
+    if (resetting || apiLoading) return;
+    setResetting(true);
+    voiceDraft.current = false;
+    voiceAnswer.current = false;
+    setListening(false);
+    setVoiceError('');
+    setMicBlocked(false);
+    setTranscript('');
+    setPrompt('');
+    setRewardError(false);
+    setSheet(null);
+    Keyboard.dismiss();
+    void cancelVietnameseSpeech();
+    void stopSummary().catch(() => {});
+    try {
+      await resetApiSession();
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const submitQuickReply = (text: string) => {
+    const prior = offline && parsedRequest ? `${parsedRequest.rawText}. ` : '';
+    void submit(prior + text);
+  };
 
   return (
-    <View
-      ref={rootRef}
-      collapsable={false}
-      onLayout={(e) => {
-        const h = Math.round(e.nativeEvent.layout.height);
-        currentHeightRef.current = h;
-        if (!isKeyboardOpenRef.current) {
-          fullHeightRef.current = h;
-          return;
-        }
-        if (fullHeightRef.current > 0) {
-          const shrink = fullHeightRef.current - h;
-          if (shrink >= 80) {
-            setKeyboardOffset(0);
-          } else if (lastKbHeightRef.current > 0) {
-            setKeyboardOffset(lastKbHeightRef.current);
-          }
-        }
-      }}
-      style={[
-        styles.screen,
-        {
-          paddingTop: insets.top,
-          paddingBottom: keyboardOffset,
-        },
-      ]}
-    >
-      {/* Minimal Header */}
+    <KeyboardAvoidingView style={[styles.screen, { paddingTop: insets.top }]} behavior="padding">
       <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <ChargePilotBrand size={32} />
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                setPromptText('');
-                void resetApiSession();
-              }}
-              style={styles.resetBtn}
-              accessibilityLabel="Bắt đầu phiên trò chuyện mới"
-            >
-              <RotateCcw size={13} color={COLORS.textSecondary} />
-            </Pressable>
-
-            <View style={styles.pointsBadge}>
-              <Image
-                source={CUSTOM_ICONS.greenCharge}
-                style={{ width: 16, height: 16, flexShrink: 0 }}
-                contentFit="contain"
-              />
-              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen }]} numberOfLines={1}>
-                {greenPoints}đ
-              </Text>
-            </View>
+        <ChargePilotBrand size={28} />
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => void reset()} disabled={busy} style={styles.reset} accessibilityRole="button" accessibilityLabel="Bắt đầu phiên mới">
+            <RotateCcw size={17} color={COLORS.textSecondary} />
+          </Pressable>
+          <View style={styles.points} accessible accessibilityLabel={`${greenPoints} điểm Sạc Xanh`}>
+            <Image source={CUSTOM_ICONS.greenCharge} style={styles.pointIcon} contentFit="contain" />
+            <Text style={[TYPOGRAPHY.caption, styles.mint]}>{greenPoints}đ</Text>
           </View>
         </View>
-
-        {!isKeyboardOpen && (
-          <>
-            <View style={styles.segmentWrap}>
-              <Pressable
-                onPress={() => setMode('chat')}
-                style={[styles.segmentBtn, mode === 'chat' && styles.segmentBtnActive]}
-              >
-                <Text
-                  style={[
-                    TYPOGRAPHY.caption,
-                    { color: mode === 'chat' ? '#0B1017' : COLORS.textSecondary },
-                  ]}
-                >
-                  Trò chuyện AI
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setMode('timeline')}
-                style={[styles.segmentBtn, mode === 'timeline' && styles.segmentBtnActive]}
-              >
-                <Text
-                  style={[
-                    TYPOGRAPHY.caption,
-                    { color: mode === 'timeline' ? '#0B1017' : COLORS.textSecondary },
-                  ]}
-                >
-                  Lộ trình ({activeTimeline.length})
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* 3-Step Human-in-the-Loop (HITL) User Flow Stepper */}
-            {lastApiResponse?.intent_state === 'refusal' ? (
-              <View style={styles.flowRefusalPill}>
-                <ShieldCheck size={14} color={COLORS.warningAmber} />
-                <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
-                  Chốt chặn an toàn · Yêu cầu ngoài phạm vi / thẩm quyền
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.flowStepper}>
-                {(() => {
-                  const needsClarify =
-                    lastApiResponse?.intent_state === 'ask_back' ||
-                    lastApiResponse?.intent_state === 'partial_prompt' ||
-                    Boolean(parsedRequest && !parsedRequest.isComplete);
-                  const hasProposal =
-                    !needsClarify && Boolean(activeOption || lastApiResponse?.intent_state === 'home_charging');
-                  const step3Confirmed = itineraryStatus === 'accepted' || isHomeTokenConfirmed;
-                  const step3Declined = itineraryStatus === 'declined';
-
-                  const steps = [
-                    {
-                      num: 1,
-                      label: needsClarify ? '1. Bổ sung tin' : '1. Yêu cầu',
-                      done: hasProposal,
-                      active: !hasProposal,
-                      warn: needsClarify,
-                    },
-                    {
-                      num: 2,
-                      label: '2. Đề xuất AI',
-                      done: step3Confirmed || step3Declined,
-                      active: hasProposal && !step3Confirmed && !step3Declined,
-                      warn: false,
-                    },
-                    {
-                      num: 3,
-                      label: step3Declined
-                        ? '3. Tự chọn'
-                        : isHomeTokenConfirmed
-                          ? '3. Đã xác nhận'
-                          : '3. Chốt & Đi',
-                      done: step3Confirmed,
-                      active: step3Confirmed || step3Declined,
-                      warn: step3Declined,
-                    },
-                  ];
-
-                  return steps.map((step, idx) => (
-                    <React.Fragment key={step.num}>
-                      <View
-                        style={[
-                          styles.flowStepPill,
-                          step.done && styles.flowStepDone,
-                          step.warn && !step.done && styles.flowStepWarn,
-                          step.active && !step.done && !step.warn && styles.flowStepActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            TYPOGRAPHY.micro,
-                            {
-                              color: step.done
-                                ? '#0B1017'
-                                : step.warn
-                                  ? COLORS.warningAmber
-                                  : step.active
-                                    ? COLORS.energyGreen
-                                    : COLORS.textMuted,
-                              fontWeight: step.done || step.active || step.warn ? '700' : '500',
-                            },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {step.done ? `✓ ${step.label}` : step.label}
-                        </Text>
-                      </View>
-                      {idx < 2 && <View style={styles.flowStepConnector} />}
-                    </React.Fragment>
-                  ));
-                })()}
-              </View>
-            )}
-          </>
-        )}
       </View>
 
-      {mode === 'chat' ? (
-        <>
-          <ScrollView
-            ref={scrollRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Original P-006 Mascot Dialogue Hero — hidden while typing so chat & input stay visible */}
-            {!isKeyboardOpen && (
-              <MascotAssistant
-                mood={mascotMood}
-                speech={mascotSpeech}
-                badgeText={mascotBadge}
-                size={64}
-              />
-            )}
-
-            {/* Subtle offline fallback note when network is unavailable */}
-            {apiError && apiSourceMode === 'offline_fallback' && (
-              <View style={styles.offlineBanner}>
-                <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, flex: 1 }]}>
-                  Đang tạm dùng chế độ ngoại tuyến (không có kết nối mạng).
-                </Text>
-              </View>
-            )}
-
-            {/* Open Settings CTA if Microphone permission is permanently blocked */}
-            {micPermissionBlocked && (
-              <Pressable
-                onPress={() => {
-                  Linking.openSettings().catch(() => {});
-                }}
-                style={styles.openSettingsBtn}
+      <ScrollView
+        style={styles.stage}
+        contentContainerStyle={[styles.stageContent, !compact && styles.centerStage, showingResult && fontScale < 1.45 && styles.resultStage]}
+        scrollEnabled={!showingResult || fontScale >= 1.45 || height < 700}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View layout={reducedMotion ? undefined : LinearTransition.duration(220)} style={compact ? styles.compactHero : styles.hero}>
+          <MascotAssistant mood={mood} size={stageSize} audioLevel={audioLevel} />
+          <View style={[compact ? styles.compactCopy : styles.centerCopy, showingResult && styles.resultBubble]}>
+            <Text accessibilityLiveRegion="polite" style={[compact ? TYPOGRAPHY.caption : TYPOGRAPHY.sectionTitle, { color: MOOD_ACCENT[mood] }, !compact && styles.centerText]}>
+              {status}
+            </Text>
+            {!!summary && (
+              <Text
+                style={[compact ? TYPOGRAPHY.caption : TYPOGRAPHY.body, styles.summary, !compact && styles.centerText]}
+                numberOfLines={composing ? 4 : undefined}
               >
-                <Mic size={16} color="#0B1017" />
-                <Text style={[TYPOGRAPHY.caption, { color: '#0B1017', fontWeight: '700' }]}>
-                  Mở Cài đặt cấp quyền Micro
-                </Text>
+                {summary}
+              </Text>
+            )}
+          </View>
+        </Animated.View>
+
+        {mood === 'idle' && (
+          <View style={[styles.chips, styles.centerChips]}>
+            {SAMPLES.map((sample) => (
+              <Pressable key={sample.label} onPress={() => void submit(sample.prompt)} style={styles.chip} accessibilityRole="button">
+                <Text style={[TYPOGRAPHY.caption, styles.primary]}>{sample.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {!composing && !busy && !voiceError && clarify && (
+          <View style={styles.clarifications}>
+            {intent === 'partial_prompt' ? (
+              <View style={[styles.chips, styles.centerChips]}>
+                <Pressable style={styles.chip} onPress={() => submitQuickReply('Có, tìm giúp mình')} accessibilityRole="button"><Text style={[TYPOGRAPHY.caption, styles.mint]}>Tìm trạm</Text></Pressable>
+                <Pressable style={styles.chip} onPress={() => submitQuickReply('Không, cảm ơn')} accessibilityRole="button"><Text style={[TYPOGRAPHY.caption, styles.primary]}>Để sau</Text></Pressable>
+              </View>
+            ) : askedFields.map((field) => (
+              <View key={field} style={[styles.chips, styles.centerChips]}>
+                {QUICK_REPLIES[field].map((entry) => (
+                  <Pressable key={entry.label} style={styles.chip} onPress={() => submitQuickReply(entry.text)} accessibilityRole="button">
+                    <Text style={[TYPOGRAPHY.caption, styles.mint]}>{entry.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {voiceError && micBlocked && !composing && (
+          <Pressable onPress={() => void Linking.openSettings()} style={styles.chip} accessibilityRole="button">
+            <Text style={[TYPOGRAPHY.caption, styles.mint]}>Mở Cài đặt micro</Text>
+          </Pressable>
+        )}
+
+        {showingResult && (
+          <JourneyProposals
+            options={proposedOptions.map((proposal) => ({ ...proposal, distanceKm: suggestedDistance(proposal, lastApiResponse) }))}
+            activeIndex={activeOptionIndex}
+            width={width - SPACING.lg * 2}
+            rescue={rescue}
+            canKeepDriving={lastApiResponse?.mappo_strategy?.strategy === 'SKIP'}
+            onSelect={selectOption}
+            onAccept={() => {
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              acceptProposedItinerary(false);
+            }}
+            onMap={() => {
+              declineProposedItinerary();
+              router.push('/(tabs)/map');
+            }}
+          />
+        )}
+
+        {showAccepted && (
+          <View style={styles.acceptedActions}>
+            {canNavigate && (
+              <Pressable
+                style={styles.primaryButton}
+                accessibilityRole="button"
+                onPress={() => {
+                  if (!option.isIntercitySimulated && (option.hanoiStationId || option.apiStationId)) {
+                    router.push('/navigation');
+                  } else {
+                    void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${option.stationLat},${option.stationLon}`).catch(() => {});
+                  }
+                }}
+              >
+                <Navigation size={18} color={COLORS.bg} />
+                <Text style={[TYPOGRAPHY.cardTitle, styles.onMint]}>Bắt đầu dẫn đường</Text>
               </Pressable>
             )}
-
-            {/* Voice Sample Cards when listening or empty (hidden when keyboard is open) */}
-            {!isKeyboardOpen &&
-              (isListening || (!activeOption && !parsedRequest && !lastApiResponse)) && (
-              <Animated.View entering={FadeInDown.duration(180)} style={styles.samplesBlock}>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
-                  {isListening ? 'Chạm câu nói mẫu để thử nhanh:' : 'Gợi ý câu hỏi tự nhiên:'}
-                </Text>
-                {VOICE_SAMPLES.map((s) => (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => {
-                      setPromptText(s.prompt);
-                      void submitNaturalText(s.prompt);
-                    }}
-                    style={styles.sampleCard}
-                  >
-                    <View style={styles.micBadge}>
-                      <Image
-                        source={CUSTOM_ICONS.micVoice}
-                        style={{ width: 16, height: 16 }}
-                        contentFit="contain"
-                      />
-                    </View>
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1 }]}>
-                      {s.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </Animated.View>
+            {timeline.length > 0 && (
+              <Pressable style={styles.link} onPress={() => setSheet('timeline')} accessibilityRole="button">
+                <Clock size={15} color={COLORS.energyGreen} />
+                <Text style={[TYPOGRAPHY.caption, styles.mint]}>Xem lộ trình chi tiết ({timeline.length} chặng)</Text>
+              </Pressable>
             )}
-
-            {/* User Query Bubble */}
-            {!busyThinking && apiSourceMode === 'live' && lastApiResponse?.query && (
-              <Animated.View entering={FadeInDown.duration(160)} style={styles.userBubble}>
-                <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, marginBottom: 2 }]}>
-                  Bạn vừa hỏi
-                </Text>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, lineHeight: 19 }]}>
-                  {lastApiResponse.query}
-                </Text>
-              </Animated.View>
-            )}
-
-            {/* AI Full Reply Card — expanded immediately ONLY when there is no glanceable station card */}
-            {!busyThinking && apiSourceMode === 'live' && lastApiResponse && !activeOption && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.liveReplyCard}>
-                <View style={styles.liveReplyHeader}>
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
-                    Trợ lý ChargePilot AI
-                  </Text>
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, flexShrink: 0 }]} numberOfLines={1}>
-                    {INTENT_LABELS[lastApiResponse.intent_state] || 'Tư vấn sạc'}
-                  </Text>
-                </View>
-                {lastApiResponse.mappo_strategy && (
-                  <View style={styles.mappoPill}>
-                    <ShieldCheck size={14} color={COLORS.energyGreen} />
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={2}>
-                      MAPPO: {lastApiResponse.mappo_strategy.strategy_vi}
-                    </Text>
-                  </View>
-                )}
-                <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
-                {lastApiResponse.guardrails?.excluded_note && (
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
-                    Lưu ý an toàn: {lastApiResponse.guardrails.excluded_note}
-                  </Text>
-                )}
-                {homeGreenToken && (
-                  <Pressable
-                    onPress={() => {
-                      if (!isHomeTokenConfirmed) {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                        void confirmGreenToken(homeGreenToken, 'Sạc tại nhà ngoài cao điểm');
-                      }
-                    }}
-                    disabled={isHomeTokenConfirmed}
-                    style={[styles.acceptBtn, isHomeTokenConfirmed && { opacity: 0.6 }]}
-                  >
-                    <Check size={15} color="#0B1017" />
-                    <Text style={[TYPOGRAPHY.caption, { color: '#0B1017', fontWeight: '700' }]}>
-                      {isHomeTokenConfirmed
-                        ? `Đã nhận +${lastApiResponse.green_reward.points} điểm xanh`
-                        : `Xác nhận sạc xanh (+${lastApiResponse.green_reward.points}đ)`}
-                    </Text>
-                  </Pressable>
-                )}
-              </Animated.View>
-            )}
-
-            {/* Compact MAPPO & safety pill above the glanceable station card */}
-            {!busyThinking && activeOption && apiSourceMode === 'live' && lastApiResponse && (
-              <>
-                {lastApiResponse.mappo_strategy && (
-                  <View style={styles.mappoPill}>
-                    <ShieldCheck size={14} color={COLORS.energyGreen} />
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={2}>
-                      {/* "SKIP" next to a station card reads as a contradiction: soften it (not in rescue). */}
-                      {lastApiResponse.mappo_strategy.strategy === 'SKIP' && lastApiResponse.intent_state !== 'rescue'
-                        ? activeOption.reward.points > 0
-                          ? 'Pin vẫn đủ chạy tiếp · Có thể sạc sớm để tích điểm'
-                          : 'Pin vẫn đủ chạy tiếp · Có thể sạc dự phòng tại trạm dưới'
-                        : `MAPPO: ${lastApiResponse.mappo_strategy.strategy_vi}`}
-                    </Text>
-                  </View>
-                )}
-                {lastApiResponse.guardrails?.excluded_note && (
-                  <View style={styles.offlineBanner}>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, flex: 1 }]} numberOfLines={2}>
-                      {lastApiResponse.guardrails.excluded_note}
-                    </Text>
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* Front-door partial_prompt quick Yes/No reply chips */}
-            {!busyThinking &&
-              apiSourceMode === 'live' &&
-              lastApiResponse?.intent_state === 'partial_prompt' && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.missingBox}>
-                <View style={styles.quickChipsRow}>
-                  {[
-                    { label: 'Có, tìm trạm sạc', text: 'Có, tìm giúp mình' },
-                    { label: 'Không, cảm ơn', text: 'Không, cảm ơn' },
-                  ].map((q) => (
-                    <Pressable
-                      key={q.label}
-                      onPress={() => {
-                        setPromptText(q.text);
-                        void submitNaturalText(q.text);
-                      }}
-                      style={styles.quickChip}
-                    >
-                      <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>
-                        {q.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Live AI ask_back follow-up questions & multi-turn quick replies */}
-            {!busyThinking &&
-              apiSourceMode === 'live' &&
-              lastApiResponse?.intent_state === 'ask_back' && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.missingBox}>
-                {lastApiResponse.follow_up_questions.length > 0 && (
-                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.warningAmber }]}>
-                    {lastApiResponse.follow_up_questions.join(' ')}
-                  </Text>
-                )}
-                <View style={styles.quickChipsRow}>
-                  {[
-                    {
-                      label: 'VF e34 · 35% · Cầu Giấy 10:00 T3',
-                      text: 'VF e34 pin 35% đang ở Cầu Giấy lúc 10:00 thứ Ba',
-                    },
-                    {
-                      label: 'Evo200 · 20% · Thanh Xuân 14:00 T7',
-                      text: 'Evo200 pin 20% đang ở Thanh Xuân lúc 14:00 thứ Bảy',
-                    },
-                  ].map((q) => (
-                    <Pressable
-                      key={q.label}
-                      onPress={() => {
-                        setPromptText(q.text);
-                        void submitNaturalText(q.text);
-                      }}
-                      style={styles.quickChip}
-                    >
-                      <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>
-                        + {q.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Missing Info Quick-Reply Pills */}
-            {parsedRequest && !parsedRequest.isComplete && (
-              <Animated.View entering={FadeInDown.duration(200)} style={styles.missingBox}>
-                {parsedRequest.missingFields.map((field) => (
-                  <View key={field} style={styles.quickChipsRow}>
-                    {QUICK_FILL_CHIPS[field].chips.map((c) => (
-                      <Pressable
-                        key={c.label}
-                        onPress={() => handleQuickAppend(c.append)}
-                        style={styles.quickChip}
-                      >
-                        <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>
-                          + {c.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ))}
-              </Animated.View>
-            )}
-
-            {/* Single Clean AI Proposal Card */}
-            {!busyThinking && activeOption && (
-              <Animated.View entering={FadeInDown.duration(220)} style={styles.proposalCard}>
-                {/* Compact 1-line Green Score Pill (breakdown lives in details / Vehicle tab) */}
-                {activeOption.reward.points > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setShowFullReply(true);
-                      setTimeout(() => {
-                        scrollRef.current?.scrollToEnd({ animated: true });
-                      }, 120);
-                    }}
-                    style={styles.rewardCompactPill}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Cộng ${activeOption.reward.points} điểm Sạc Xanh, chạm để xem chi tiết cách tính`}
-                  >
-                    <Image
-                      source={CUSTOM_ICONS.greenCharge}
-                      style={{ width: 18, height: 18, flexShrink: 0 }}
-                      contentFit="contain"
-                    />
-                    <Text
-                      style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, fontWeight: '700', flex: 1 }]}
-                      numberOfLines={1}
-                    >
-                      +{activeOption.reward.points} điểm Sạc Xanh
-                      {activeOption.reward.discountVnd > 0
-                        ? ` · Giảm ~${formatVnd(activeOption.reward.discountVnd)}`
-                        : ''}
-                    </Text>
-                    <Info size={14} color={COLORS.energyGreen} />
-                  </Pressable>
-                )}
-
-                <View style={styles.stationHeroRow}>
-                  <View style={styles.stationThumb3D}>
-                    <Image
-                      source={CUSTOM_ICONS.evStation}
-                      style={{ width: 44, height: 44 }}
-                      contentFit="contain"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary }]} numberOfLines={2}>
-                      {activeOption.stationName}
-                    </Text>
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginTop: 2 }]} numberOfLines={2}>
-                      {activeOption.destinationName && activeOption.destinationName !== 'Hà Nội'
-                        ? `Đi ${activeOption.destinationName} · `
-                        : ''}
-                      {activeOption.stationAddress}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.metricsRow}>
-                  <View style={styles.metricCell}>
-                    <Text
-                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.72}
-                    >
-                      {activeOption.distanceKm} km
-                    </Text>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-                      Chạy {activeOption.driveMin}p
-                    </Text>
-                  </View>
-                  <View style={styles.metricCell}>
-                    <Text
-                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.72}
-                    >
-                      {activeOption.chargeMin}p
-                    </Text>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
-                      {activeOption.arrivalBatteryPct}%→{activeOption.departureBatteryPct}%
-                    </Text>
-                  </View>
-                  <View style={styles.metricCell}>
-                    <Text
-                      style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.72}
-                    >
-                      {activeOption.etaText}
-                    </Text>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]} numberOfLines={1}>
-                      {isChargeWindowText(activeOption.etaText) ? 'Khung sạc' : 'Đến nơi'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 3 Concise Decision Buttons */}
-                <View style={styles.decisionRow}>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                      acceptProposedItinerary();
-                      setTimeout(() => {
-                        scrollRef.current?.scrollToEnd({ animated: true });
-                      }, 120);
-                    }}
-                    style={styles.acceptBtn}
-                  >
-                    <Check size={15} color="#0B1017" />
-                    <Text style={[TYPOGRAPHY.caption, { color: '#0B1017', fontWeight: '700' }]} numberOfLines={1}>
-                      {itineraryStatus === 'accepted' ? 'Đã chốt lịch' : 'Theo lịch này'}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      requestAlternativeOption();
-                    }}
-                    style={styles.altBtn}
-                  >
-                    <RefreshCw size={14} color={COLORS.textPrimary} />
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary }]} numberOfLines={1}>
-                      Gợi ý khác
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      declineProposedItinerary();
-                      router.push('/(tabs)/map');
-                    }}
-                    style={styles.declineBtn}
-                  >
-                    <XCircle size={14} color={COLORS.textSecondary} />
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1}>
-                      Tự chọn
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {itineraryStatus === 'accepted' && (
-                  <View style={styles.confirmedBanner}>
-                    <Check size={15} color={COLORS.energyGreen} />
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, flex: 1 }]}>
-                      Đã chốt lịch trình tới {activeOption.stationName}. Chọn dẫn đường hoặc xem lộ trình bên dưới!
-                    </Text>
-                  </View>
-                )}
-
-                {itineraryStatus === 'accepted' &&
-                  !activeOption.isIntercitySimulated &&
-                  (activeOption.hanoiStationId || activeOption.apiStationId) && (
-                  <Pressable
-                    onPress={() => router.push('/navigation')}
-                    style={styles.startNavBtn}
-                  >
-                    <Navigation size={16} color="#0B1017" />
-                    <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
-                      Bắt đầu dẫn đường mô phỏng
-                    </Text>
-                  </Pressable>
-                )}
-
-                {itineraryStatus === 'accepted' && activeTimeline.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setMode('timeline');
-                    }}
-                    style={styles.timelineCtaBtn}
-                  >
-                    <Clock size={15} color={COLORS.textPrimary} />
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, fontWeight: '700' }]}>
-                      Xem lộ trình chi tiết ({activeTimeline.length} chặng)
-                    </Text>
-                  </Pressable>
-                )}
-
-                {itineraryStatus === 'accepted' &&
-                  activeOption.stationLat != null &&
-                  activeOption.stationLon != null && (
-                  <Pressable
-                    onPress={() => {
-                      const url = `https://www.google.com/maps/dir/?api=1&destination=${activeOption.stationLat},${activeOption.stationLon}`;
-                      Linking.openURL(url).catch(() => {});
-                    }}
-                    style={styles.mapsBtn}
-                  >
-                    <ExternalLink size={16} color={COLORS.energyGreen} />
-                    <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.energyGreen }]}>
-                      Mở Google Maps tới trạm
-                    </Text>
-                  </Pressable>
-                )}
-              </Animated.View>
-            )}
-
-            {/* Collapsible AI analysis & Green Score breakdown below the glanceable proposal card */}
-            {!busyThinking &&
-              activeOption &&
-              (activeOption.reward.points > 0 || (apiSourceMode === 'live' && lastApiResponse)) && (
-              <View style={{ gap: 8 }}>
-                <Pressable
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setShowFullReply((v) => !v);
-                  }}
-                  style={styles.detailToggleBtn}
-                >
-                  <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '600' }]}>
-                    {showFullReply
-                      ? 'Thu gọn phân tích AI & điểm Sạc Xanh ▴'
-                      : 'Xem chi tiết phân tích AI & cách tính điểm ▾'}
-                  </Text>
-                </Pressable>
-                {showFullReply && (
-                  <Animated.View entering={FadeInDown.duration(160)} style={styles.liveReplyCard}>
-                    {activeOption.reward.points > 0 && (
-                      <View style={styles.rewardDetailBox}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Image
-                            source={CUSTOM_ICONS.greenCharge}
-                            style={{ width: 16, height: 16, flexShrink: 0 }}
-                            contentFit="contain"
-                          />
-                          <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, fontWeight: '700' }]}>
-                            Chi tiết +{activeOption.reward.points} điểm Sạc Xanh
-                          </Text>
-                        </View>
-                        <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, lineHeight: 18 }]}>
-                          {activeOption.reward.reason}
-                        </Text>
-                      </View>
-                    )}
-                    {apiSourceMode === 'live' && lastApiResponse && (
-                      <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
-                    )}
-                  </Animated.View>
-                )}
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Minimal Voice + Text Input Dock — always stays visible above keyboard */}
-          <View style={styles.inputDock}>
-            <Pressable
-              onPress={handleToggleMic}
-              style={[styles.micDockBtn, isListening && styles.micDockBtnActive]}
-              accessibilityLabel="Bật tắt Mic"
-            >
-              {isListening ? (
-                <MicOff size={20} color="#0B1017" />
-              ) : (
-                <Mic size={20} color="#0B1017" />
-              )}
-            </Pressable>
-
-            <TextInput
-              ref={inputRef}
-              value={promptText}
-              onChangeText={setPromptText}
-              placeholder="Nói hoặc gõ yêu cầu..."
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.dockInput}
-              multiline
-              maxLength={400}
-              textAlignVertical="center"
-              returnKeyType="send"
-              onSubmitEditing={() => submitNaturalText(promptText)}
-            />
-
-            <Pressable
-              onPress={() => submitNaturalText(promptText)}
-              disabled={!promptText.trim()}
-              style={[styles.sendBtn, !promptText.trim() && { opacity: 0.4 }]}
-              accessibilityLabel="Gửi yêu cầu"
-            >
-              <Send size={18} color={COLORS.energyGreen} />
-            </Pressable>
           </View>
-        </>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+        )}
+
+        {!composing && !busy && !rescue && rewardPoints > 0 && (
+          <View style={styles.clarifications}>
+            <Pressable disabled={credited || rewardBusy} style={styles.link} onPress={() => void claimReward()} accessibilityRole="button">
+              <Check size={16} color={COLORS.energyGreen} />
+              <Text style={[TYPOGRAPHY.caption, styles.mint]}>
+                {credited ? `Đã nhận +${rewardPoints} điểm Sạc Xanh` : rewardBusy ? 'Đang xác nhận…' : `Xác nhận +${rewardPoints} điểm Sạc Xanh`}
+              </Text>
+            </Pressable>
+            {rewardError && <Text style={[TYPOGRAPHY.caption, styles.centerText, styles.warning]}>{apiError || 'Chưa xác nhận được điểm. Hãy thử lại.'}</Text>}
+          </View>
+        )}
+
+        {!composing && !busy && hasDetails && (
+          <Pressable style={styles.link} onPress={() => setSheet('reply')} accessibilityRole="button">
+            <Text style={[TYPOGRAPHY.caption, styles.mint]}>Xem chi tiết</Text>
+          </Pressable>
+        )}
+      </ScrollView>
+
+      <View style={styles.inputDock}>
+        <Pressable
+          onPress={() => { if (listening) void stopVietnameseSpeech(); else void startMic(); }}
+          disabled={busy}
+          style={[styles.mic, listening && styles.micActive]}
+          accessibilityRole="button"
+          accessibilityLabel={listening ? 'Dừng nghe' : 'Bật micro'}
         >
-          {activeTimeline.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <MascotAssistant
-                mood="idle"
-                speech="Chưa có lịch trình nào được chốt. Quay lại tab Trò chuyện AI và nói với mình điểm đến của bạn nhé!"
-                size={56}
-              />
-            </View>
-          ) : (
-            <View style={styles.timelineList}>
-              {activeTimeline.map((stage, idx) => {
-                const isLast = idx === activeTimeline.length - 1;
-                const accentColor =
-                  stage.status === 'critical'
-                    ? COLORS.criticalRed
-                    : STAGE_ICON_COLOR[stage.type];
+          {listening ? <MicOff size={20} color={COLORS.bg} /> : <Mic size={20} color={COLORS.bg} />}
+        </Pressable>
+        <TextInput
+          value={prompt}
+          onChangeText={(text) => {
+            if (!text.trim()) { voiceDraft.current = false; setTranscript(''); }
+            setPrompt(text);
+            setVoiceError('');
+          }}
+          placeholder="Nói hoặc gõ yêu cầu…"
+          placeholderTextColor={COLORS.textMuted}
+          style={styles.input}
+          multiline
+          maxLength={400}
+          textAlignVertical="center"
+          returnKeyType="send"
+          submitBehavior="submit"
+          onSubmitEditing={() => void submit(prompt, voiceDraft.current)}
+          accessibilityLabel="Nói hoặc gõ yêu cầu"
+        />
+        <Pressable
+          onPress={() => void submit(prompt, voiceDraft.current)}
+          disabled={!prompt.trim() || busy}
+          style={[styles.send, (!prompt.trim() || busy) && styles.disabled]}
+          accessibilityRole="button"
+          accessibilityLabel="Gửi yêu cầu"
+        >
+          <Send size={18} color={COLORS.energyGreen} />
+        </Pressable>
+      </View>
 
-                const IconComp =
-                  stage.type === 'charging'
-                    ? BatteryCharging
-                    : stage.type === 'waiting'
-                      ? Clock
-                      : stage.type === 'appointment'
-                        ? CalendarClock
-                        : stage.type === 'destination'
-                          ? Flag
-                          : stage.type === 'driving'
-                            ? Navigation
-                            : ShieldCheck;
-
-                return (
-                  <View key={stage.id} style={styles.timelineItem}>
-                    <View style={styles.timeCol}>
-                      <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}>
-                        {stage.time}
-                      </Text>
-                    </View>
-                    <View style={styles.railCol}>
-                      <View style={[styles.nodeCircle, { borderColor: accentColor }]}>
-                        <IconComp size={14} color={accentColor} />
-                      </View>
-                      {!isLast && <View style={styles.railLine} />}
-                    </View>
-                    <View style={styles.stageCard}>
-                      <View style={styles.stageTop}>
-                        <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary, flex: 1 }]}>
-                          {stage.title}
-                        </Text>
-                        <Text style={[TYPOGRAPHY.metricSmall, { color: COLORS.energyGreen }]}>
-                          {stage.batteryPct}%
-                        </Text>
-                      </View>
-                      <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginTop: 4 }]}>
-                        {stage.subtitle}
-                      </Text>
+      {sheet && (
+        <Modal transparent animationType="none" onRequestClose={() => setSheet(null)} statusBarTranslucent>
+          <GestureHandlerRootView style={styles.sheetRoot}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} accessibilityLabel="Đóng chi tiết" />
+            <BottomSheet
+              snapPoints={['76%']}
+              enableDynamicSizing={false}
+              enablePanDownToClose
+              onClose={() => setSheet(null)}
+              backgroundStyle={styles.sheetBackground}
+              handleIndicatorStyle={styles.sheetHandle}
+            >
+              <View style={styles.sheetHeader}>
+                <Text style={[TYPOGRAPHY.sectionTitle, styles.primary]}>{sheet === 'timeline' ? 'Lộ trình chi tiết' : 'Chi tiết đề xuất'}</Text>
+                <Pressable onPress={() => setSheet(null)} accessibilityRole="button" accessibilityLabel="Đóng" style={styles.reset}>
+                  <X size={20} color={COLORS.textPrimary} />
+                </Pressable>
+              </View>
+              <BottomSheetScrollView contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + SPACING.xl }]}>
+                {sheet === 'timeline' ? timeline.map((item) => (
+                  <View key={item.id} style={styles.timelineRow}>
+                    <Text style={[TYPOGRAPHY.metricSmall, styles.mint, styles.timelineTime]}>{item.time}</Text>
+                    <View style={styles.timelineCopy}>
+                      <Text style={[TYPOGRAPHY.cardTitle, styles.primary]}>{item.title}</Text>
+                      <Text style={[TYPOGRAPHY.caption, styles.secondary]}>{item.subtitle}</Text>
+                      <Text style={[TYPOGRAPHY.micro, item.status === 'critical' ? styles.critical : styles.mint]}>{item.batteryPct}% pin</Text>
                     </View>
                   </View>
-                );
-              })}
-            </View>
-          )}
-        </ScrollView>
+                )) : (
+                  <>
+                    {!!replyText && <MarkdownText>{replyText}</MarkdownText>}
+                    {!!guardrail && <Text style={[TYPOGRAPHY.body, styles.warning]}>{guardrail}</Text>}
+                    {proposedOptions.length > 0 && (!lastApiResponse || !replyText) && (
+                      <View style={styles.clarifications}>
+                        <Text style={[TYPOGRAPHY.cardTitle, styles.primary]}>Các trạm đề xuất</Text>
+                        {proposedOptions.map((item, index) => (
+                          <Text key={item.id} style={[TYPOGRAPHY.body, styles.secondary]}>
+                            {index + 1}. {item.stationName} · {item.distanceKm} km{item.statusLabel ? ` · ${item.statusLabel}` : ''}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    {!rescue && !!option?.reward.points && <Text style={[TYPOGRAPHY.body, styles.mint]}>{option.reward.reason}</Text>}
+                  </>
+                )}
+              </BottomSheetScrollView>
+            </BottomSheet>
+          </GestureHandlerRootView>
+        </Modal>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  header: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.sm + 2,
-    gap: SPACING.sm + 2,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  headerActions: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  apiPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.pill,
-  },
-  resetBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.warningAmberDim,
-    borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  liveReplyCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    padding: SPACING.md,
-    gap: 8,
-  },
-  liveReplyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  micBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.energyGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pointsBadge: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.energyGreenDim,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: RADIUS.pill,
-  },
-  segmentWrap: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentBtnActive: {
-    backgroundColor: COLORS.energyGreen,
-  },
-  scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
-    gap: SPACING.sm + 4,
-  },
-  threeAuraCard: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    backgroundColor: '#080D14',
-  },
-  samplesBlock: {
-    gap: 8,
-  },
-  openSettingsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.warningAmber,
-    paddingHorizontal: SPACING.md,
-  },
-  sampleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 11,
-  },
-  missingBox: {
-    gap: 8,
-  },
-  quickChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  quickChip: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  proposalCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    padding: SPACING.lg,
-    gap: 10,
-  },
-  rewardCompactPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.energyGreenDim,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-  },
-  rewardDetailBox: {
-    backgroundColor: COLORS.energyGreenDim,
-    borderColor: COLORS.energyGreenBorder,
-    borderWidth: 1,
-    borderRadius: RADIUS.md,
-    padding: 10,
-    gap: 4,
-    marginBottom: 8,
-  },
-  stationHeroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stationThumb3D: {
-    width: 66,
-    height: 66,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.energyGreenDim,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  metricCell: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: RADIUS.md,
-    padding: 10,
-    gap: 2,
-  },
-  decisionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 2,
-  },
-  acceptBtn: {
-    flex: 1.3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.energyGreen,
-    paddingHorizontal: 8,
-  },
-  altBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 8,
-  },
-  declineBtn: {
-    flex: 0.9,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 8,
-  },
-  startNavBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 46,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.energyGreen,
-    marginTop: 2,
-  },
-  mapsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.energyGreenDim,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-  },
-  flowStepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  flowStepPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  flowStepActive: {
-    borderColor: COLORS.energyGreenBorder,
-    backgroundColor: COLORS.energyGreenDim,
-  },
-  flowStepDone: {
-    borderColor: COLORS.energyGreen,
-    backgroundColor: COLORS.energyGreen,
-  },
-  flowStepWarn: {
-    borderColor: COLORS.warningAmberBorder,
-    backgroundColor: COLORS.warningAmberDim,
-  },
-  flowRefusalPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.warningAmberDim,
-    borderWidth: 1,
-    borderColor: COLORS.warningAmberBorder,
-  },
-  flowStepConnector: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 4,
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    maxWidth: '88%',
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.navBlueBorder,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-  },
-  mappoPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.energyGreenDim,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  confirmedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.energyGreenDim,
-    borderWidth: 1,
-    borderColor: COLORS.energyGreenBorder,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 8,
-  },
-  timelineCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  inputDock: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    zIndex: 30,
-    elevation: 12,
-  },
-  micDockBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: COLORS.energyGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micDockBtnActive: {
-    backgroundColor: COLORS.warningAmber,
-  },
-  dockInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 96,
-    backgroundColor: COLORS.bg,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    color: COLORS.textPrimary,
-    fontFamily: 'BeVietnamPro_400Regular',
-    fontSize: 14,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyCard: {
-    paddingTop: SPACING.md,
-  },
-  timelineList: {
-    gap: 2,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 10,
-  },
-  timeCol: {
-    width: 52,
-    paddingTop: 12,
-  },
-  railCol: {
-    width: 30,
-    alignItems: 'center',
-  },
-  nodeCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: COLORS.surface,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  railLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: COLORS.border,
-    marginVertical: 2,
-  },
-  stageCard: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: 10,
-  },
-  stageTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  detailToggleBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
+  screen: { flex: 1, backgroundColor: COLORS.bg },
+  header: { minHeight: 52, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  reset: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  points: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.energyGreenDim, borderColor: COLORS.energyGreenBorder, borderWidth: 1, borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  pointIcon: { width: 16, height: 16 },
+  stage: { flex: 1 },
+  stageContent: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, gap: SPACING.md },
+  centerStage: { justifyContent: 'center' },
+  resultStage: { paddingTop: SPACING.md },
+  hero: { alignItems: 'center', gap: SPACING.lg, paddingVertical: SPACING.sm },
+  compactHero: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  compactCopy: { flex: 1, gap: 4 },
+  resultBubble: { padding: SPACING.sm, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, borderColor: COLORS.border, borderWidth: 1 },
+  centerCopy: { alignItems: 'center', maxWidth: 380, gap: SPACING.sm },
+  centerText: { textAlign: 'center' },
+  summary: { color: COLORS.textPrimary },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  centerChips: { justifyContent: 'center' },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: RADIUS.pill, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  clarifications: { gap: SPACING.sm },
+  acceptedActions: { gap: 4 },
+  link: { minHeight: 44, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: SPACING.sm },
+  primaryButton: { minHeight: 52, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.energyGreen, borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm },
+  inputDock: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.surface },
+  mic: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.energyGreen },
+  micActive: { backgroundColor: COLORS.warningAmber },
+  input: { ...TYPOGRAPHY.body, flex: 1, minHeight: 44, maxHeight: 96, backgroundColor: COLORS.bg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.md, paddingVertical: 10, color: COLORS.textPrimary },
+  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  disabled: { opacity: 0.4 },
+  sheetRoot: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.60)' },
+  sheetBackground: { backgroundColor: COLORS.surface },
+  sheetHandle: { backgroundColor: COLORS.textMuted },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: SPACING.lg, paddingRight: SPACING.sm },
+  sheetContent: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.md },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.md, backgroundColor: COLORS.bg },
+  timelineTime: { minWidth: 54 },
+  timelineCopy: { flex: 1, gap: 4 },
+  mint: { color: COLORS.energyGreen },
+  onMint: { color: COLORS.bg, fontWeight: '700' },
+  primary: { color: COLORS.textPrimary },
+  secondary: { color: COLORS.textSecondary },
+  warning: { color: COLORS.warningAmber },
+  critical: { color: COLORS.criticalRed },
 });

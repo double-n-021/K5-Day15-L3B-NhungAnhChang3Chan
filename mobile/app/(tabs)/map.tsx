@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import {
   BatteryCharging,
   Compass,
+  Mic,
   Moon,
   Navigation,
   Sun,
@@ -199,11 +200,7 @@ export default function SmartMapScreen() {
             accessibilityLabel="Nói với AI để tìm trạm sạc"
           >
             <View style={styles.micBadge}>
-              <Image
-                source={CUSTOM_ICONS.micVoice}
-                style={{ width: 16, height: 16 }}
-                contentFit="contain"
-              />
+              <Mic size={16} color={COLORS.bg} />
             </View>
             <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={1}>
               Nói với AI nơi bạn muốn đến...

@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gauge, KeyRound, MapPin, Mic } from 'lucide-react-native';
+import { Bot, House, KeyRound, MapPin } from 'lucide-react-native';
 import { COLORS } from '@/theme/tokens';
 import { FONT_FAMILY } from '@/theme/typography';
 
@@ -36,14 +36,14 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Trang chủ',
-          tabBarIcon: ({ color, size }) => <Gauge size={size - 2} color={color} />,
+          tabBarIcon: ({ color, size }) => <House size={size - 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="journey"
         options={{
           title: 'Trợ lý AI',
-          tabBarIcon: ({ color, size }) => <Mic size={size - 2} color={color} />,
+          tabBarIcon: ({ color, size }) => <Bot size={size - 2} color={color} />,
         }}
       />
       <Tabs.Screen

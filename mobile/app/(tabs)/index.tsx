@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { LocateFixed, Mic } from 'lucide-react-native';
 import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
 import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { ASSETS_3D } from '@/data/assets3d';
@@ -27,11 +28,6 @@ const QUICK_ASKS = [
   { label: 'Sạc trưa nắng nhận điểm xanh', prompt: 'Sạc trưa nắng ở đâu để nhận điểm Sạc Xanh?' },
   { label: 'Trạm gần nhất còn trống', prompt: 'Trạm sạc gần nhất còn trống' },
 ];
-
-function formatHHMM(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -149,7 +145,7 @@ export default function HomeScreen() {
           style={styles.locationRow}
           accessibilityLabel="Cập nhật vị trí GPS hiện tại"
         >
-          <Image source={ASSETS_3D.mapPinGold} style={styles.icon18} contentFit="contain" />
+          <LocateFixed size={18} color={COLORS.navBlue} />
           <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flexShrink: 1 }]} numberOfLines={1}>
             {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
           </Text>
@@ -183,40 +179,26 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.vehicleRow}>
-            <Image
-              source={vehicle.angles[0].source}
-              style={styles.vehicleThumb}
-              contentFit="cover"
-              transition={150}
-            />
-            {/* Name gets the full row width so "VinFast Evo200 2023" is never cut. */}
-            <View style={{ flex: 1 }}>
-              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]} numberOfLines={1}>
-                {vehicle.name}
-              </Text>
-              <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1}>
-                {effectiveWeather.temperatureC}°C
-                {batteryFresh ? ` · ~${recommendation.summary.estimatedRangeKm} km` : ''}
-              </Text>
+            <View style={styles.vehicleSummary}>
+              <Image
+                source={vehicle.angles[0].source}
+                style={styles.vehicleThumb}
+                contentFit="cover"
+                transition={150}
+              />
+              <View style={styles.vehicleStats}>
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
+                  {effectiveWeather.temperatureC}°C
+                </Text>
+                {batteryFresh && (
+                  <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
+                    ~{recommendation.summary.estimatedRangeKm}{'\u00a0'}km
+                  </Text>
+                )}
+              </View>
             </View>
-          </View>
 
-          <View style={[styles.chipsWrap, needBattery && styles.chipsWrapAlert]}>
-            <View style={styles.batteryHeader}>
-              <Text
-                style={[
-                  TYPOGRAPHY.micro,
-                  { color: needBattery ? COLORS.criticalRed : COLORS.textSecondary, flex: 1 },
-                ]}
-                numberOfLines={2}
-              >
-                {needBattery
-                  ? 'Chọn mức pin trước để mình tìm trạm nhé'
-                  : batteryFresh && batteryConfirmedAt !== null
-                    ? `Pin hiện tại · báo lúc ${formatHHMM(batteryConfirmedAt)} · AI dùng 30 phút`
-                    : 'Pin hiện tại còn khoảng bao nhiêu?'}
-              </Text>
-
+            <View style={styles.batterySummary}>
               <View style={styles.batteryReadout}>
                 {batteryFresh && (
                   <Pressable
@@ -242,7 +224,18 @@ export default function HomeScreen() {
                   </Pressable>
                 )}
               </View>
+              {!batteryFresh && (
+                <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>Chọn mức pin</Text>
+              )}
             </View>
+          </View>
+
+          <View style={[styles.chipsWrap, needBattery && styles.chipsWrapAlert]}>
+            {needBattery && (
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.criticalRed }]}>
+                Chọn mức pin trước để mình tìm trạm nhé
+              </Text>
+            )}
             <View style={styles.chipsRow}>
               {BATTERY_CHIPS.map((pct) => {
                 const active = batteryFresh && batteryPct === pct;
@@ -272,7 +265,7 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Bấm Mic để nói với trợ lý AI"
           >
-            <Image source={CUSTOM_ICONS.micVoice} style={{ width: 36, height: 36 }} contentFit="contain" />
+            <Mic size={32} color={COLORS.bg} />
             <Text style={[TYPOGRAPHY.micro, { color: '#0B1017', fontWeight: '700' }]}>Nói</Text>
           </Pressable>
 
@@ -439,25 +432,36 @@ const styles = StyleSheet.create({
   },
   vehicleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  vehicleThumb: {
-    width: 66,
-    height: 46,
-    borderRadius: RADIUS.sm,
-    backgroundColor: '#0B1017',
-  },
-  batteryHeader: {
-    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: SPACING.sm,
+  },
+  vehicleSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 124,
+    gap: SPACING.sm,
+  },
+  vehicleThumb: {
+    width: 72,
+    height: 50,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.bg,
+  },
+  vehicleStats: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  batterySummary: {
+    alignItems: 'flex-end',
+    marginLeft: 'auto',
   },
   batteryReadout: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    flexShrink: 0,
   },
   stepBtn: {
     width: 28,
