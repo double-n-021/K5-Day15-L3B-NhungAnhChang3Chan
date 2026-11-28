@@ -1547,6 +1547,7 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 "apk_meta": meta,
                 "mappo_status": mappo_policy.ENGINE.status(),
                 "osrm_live_routing": tools.USE_LIVE_OSRM,
+                "weather_live": tools.USE_LIVE_WEATHER,
             })
             return
         if path == "/api/release":
@@ -1743,9 +1744,11 @@ def main() -> int:
     args = parser.parse_args()
 
     tools.USE_LIVE_OSRM = os.environ.get("USE_LIVE_OSRM", "1").strip().lower() not in ("0", "false", "no")
+    tools.USE_LIVE_WEATHER = os.environ.get("USE_LIVE_WEATHER", "1").strip().lower() not in ("0", "false", "no")
     server = create_server(args.host, args.port)
     print(f"CHARGEPILOT API v{CONTRACT_VERSION} đang chạy tại http://{args.host}:{args.port} "
-          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER} · osrm_live={tools.USE_LIVE_OSRM}")
+          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER} "
+          f"· osrm_live={tools.USE_LIVE_OSRM} · weather_live={tools.USE_LIVE_WEATHER}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

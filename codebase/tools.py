@@ -26,8 +26,15 @@ DATA = os.path.join(ROOT, "data")
 
 ROAD_FACTOR = 1.3
 USE_LIVE_OSRM = False                       # bật True khi chạy api_server thật; giữ False khi chạy eval offline
+USE_LIVE_WEATHER = False                    # bật True khi chạy api_server thật; giữ False khi chạy eval offline
 OSRM_TABLE_URL = "https://router.project-osrm.org/table/v1/driving"
+OPEN_METEO_URL = (
+    "https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542"
+    "&hourly=temperature_2m,shortwave_radiation,precipitation_probability"
+    "&timezone=Asia%2FBangkok&forecast_days=7"
+)
 _OSRM_CACHE = {}                            # key -> (ts, result)
+_WEATHER_CACHE = {"ts": 0.0, "payload": None}  # cache 30 phút cho Open-Meteo live
 SAFETY_MARGIN = 0.8
 RESCUE_PCT = 15
 DEFAULT_TARGET_PCT = 80
@@ -322,14 +329,34 @@ def parse_request(text: str) -> dict:
 
 # ------------------------------------------------------------------ công cụ 2: thời tiết
 
+def _load_weather_payload():
+    """Trả (payload, is_live). Khi USE_LIVE_WEATHER=True, gọi Open-Meteo (cache 30p) và tự fallback về bản lưu."""
+    if USE_LIVE_WEATHER:
+        now = time.time()
+        if _WEATHER_CACHE["payload"] is not None and (now - _WEATHER_CACHE["ts"]) < 1800.0:
+            return _WEATHER_CACHE["payload"], True
+        try:
+            req = urllib.request.Request(OPEN_METEO_URL, headers={"User-Agent": "ChargePilot-Weather/1.0"})
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                live = json.loads(resp.read().decode("utf-8"))
+            if isinstance(live, dict) and live.get("hourly", {}).get("time"):
+                _WEATHER_CACHE["ts"] = now
+                _WEATHER_CACHE["payload"] = live
+                return live, True
+        except Exception:
+            if _WEATHER_CACHE["payload"] is not None:
+                return _WEATHER_CACHE["payload"], True
+    return _load("weather_fallback.json") or {}, False
+
+
 @tool
 def get_weather(hour: float, weekday: int = None, user_temp_c: float = None) -> dict:
-    """Thời tiết Hà Nội theo giờ, đọc bản lưu Open-Meteo (data/weather_fallback.json), bức xạ mặt trời và hệ số hao pin.
+    """Thời tiết Hà Nội theo giờ, đọc Open-Meteo (live khi chạy server thật, bản lưu khi chạy eval), bức xạ & hệ số hao pin.
     Input: giờ (0–24), thứ (0=thứ Hai… 6=Chủ nhật, có thể None), nhiệt độ người dùng nói (°C, có thể None).
     Output: forecast_temp_c, rain_pct, temp_used_c (lấy mức lạnh hơn), drain_factor, solar_wm2,
             solar_peak_wm2, solar_best_window, notes, source.
     Tác động ra ngoài: không (không gọi mạng khi chạy eval — dùng bản lưu)."""
-    payload = _load("weather_fallback.json") or {}
+    payload, is_live = _load_weather_payload()
     hourly = payload.get("hourly", {})
     times = hourly.get("time", [])
     temps = hourly.get("temperature_2m", [])
@@ -351,7 +378,8 @@ def get_weather(hour: float, weekday: int = None, user_temp_c: float = None) -> 
             i = times.index(key)
             forecast, rain = temps[i], (rains[i] if i < len(rains) else None)
             solar_wm2 = float(rads[i]) if i < len(rads) and rads[i] is not None else None
-            src = "Open-Meteo (bản lưu 27/11/2026), %s %s" % (want, key[11:])
+            src_label = "Open-Meteo (thời gian thực)" if is_live else "Open-Meteo (bản lưu 27/11/2026)"
+            src = "%s, %s %s" % (src_label, want, key[11:])
         day_rads = [(int(t[11:13]), float(rads[idx]))
                     for idx, t in enumerate(times)
                     if t.startswith(want + "T") and idx < len(rads) and rads[idx] is not None]
