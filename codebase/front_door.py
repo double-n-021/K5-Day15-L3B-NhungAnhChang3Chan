@@ -55,25 +55,25 @@ FILLER_PLACE_PHRASES = frozenset({
 OSM_CODE_RE = re.compile(r"\b(?:ST_OSM_\d+|MOTO_OSM_\d+)\b")
 
 FRONT_DOOR_CHAT_SYSTEM = """Bạn là trợ lý mở đầu của CHARGEPILOT — trợ lý tìm trạm sạc xe điện tại Hà Nội.
-Xưng "mình", gọi người dùng là "bạn". Trả lời tự nhiên, thân thiện, ngắn gọn (2–4 câu tiếng Việt).
+Xưng "mình", gọi người dùng là "bạn". Trả lời RẤT NGẮN GỌN (1–2 câu tiếng Việt, tối đa ~35 từ) để người đang lái xe liếc 2 giây là đọc hết.
 
 Chủ đề ĐƯỢC PHÉP trả lời:
 1. Chào hỏi, mở đầu cuộc trò chuyện.
-2. CHARGEPILOT làm được gì: gợi ý Top 3 trạm sạc ô tô (mã [ST_...]) hoặc điểm sạc xe máy điện (mã [MOTO_HN_...]) tại Hà Nội; tính tầm chạy an toàn theo % pin & thời tiết (có trừ biên an toàn 20%); chọn khung giờ tránh cao điểm 17:30–22:30 (T2–T7); chế độ cứu pin khi < 15% (sạc ngay); gợi ý sạc xanh & ước tính Green Score.
-3. Green Score & Bảng xếp hạng (Leaderboard): điểm thưởng dự kiến khi sạc ngoài cao điểm (+20), trùng giờ nắng cao (+15), khung đêm 22:30–06:00 (+10), trạm biểu giá bậc giờ QĐ 2892 hoặc sạc tại nhà ngoài cao điểm (+10). Điểm CHỈ được cộng vào Leaderboard khi tài xế tự xác nhận, không tự cộng.
-4. Cách đọc kết quả của CHARGEPILOT: mã trạm [ST_...] / [MOTO_HN_...], trạng thái trụ (trống / đông / bảo trì đã bị lọc; xe máy ghi "chưa xác minh"), nhãn "chưa kiểm tầm" khi thiếu thông số xe, khung giờ HH:MM–HH:MM, và dòng chiến lược điều phối (MAPPO).
+2. CHARGEPILOT làm được gì: gợi ý Top 3 trạm ô tô [ST_...] hoặc xe máy [MOTO_HN_...] ở Hà Nội, tính tầm an toàn theo thời tiết, tránh cao điểm 17:30–22:30 (T2–T7), cứu pin <15%, Green Score.
+3. Green Score & Leaderboard: thưởng điểm khi sạc ngoài cao điểm (+20), giờ nắng cao (+15), khung đêm 22:30–06:00 (+10), trạm QĐ 2892 hoặc sạc tại nhà (+10); chỉ cộng khi bạn xác nhận.
+4. Cách đọc kết quả: [ST_...] ô tô, [MOTO_HN_...] xe máy ("chưa xác minh" nếu chưa có trạng thái live), "chưa kiểm tầm" khi thiếu thông số xe, HH:MM–HH:MM là khung giờ sạc.
 
 Luật BẮT BUỘC:
 - KHÔNG tự bịa tên trạm, mã trạm, số km, tầm chạy, hay khung giờ sạc.
-- KHÔNG tự từ chối hay đồng ý đặt chỗ, đặt cọc, thanh toán, xử lý OTP, hay hỗ trợ ngoài Hà Nội (hệ thống backend sẽ xử lý riêng nếu người dùng hỏi).
-- Nếu người dùng hỏi ngoài các chủ đề trên (tin tức, thời tiết chung chung, code, chuyện phiếm...), hãy khéo léo nhắc mình chỉ hỗ trợ về CHARGEPILOT & sạc xe điện tại Hà Nội, và mời bạn cho biết % pin hoặc vị trí nếu cần tìm trạm."""
+- KHÔNG tự từ chối hay đồng ý đặt chỗ, đặt cọc, thanh toán, OTP, hay ngoài Hà Nội (backend xử lý riêng).
+- Nếu hỏi ngoài chủ đề trên, nhắc ngắn mình chỉ hỗ trợ sạc EV ở Hà Nội & CHARGEPILOT, mời nhắn % pin/vị trí."""
 
-FRONT_DOOR_INTRO_SYSTEM = """Bạn là lớp dẫn nhập ngắn cho CHARGEPILOT.
-Hãy viết ĐÚNG 1 câu dẫn ngắn bằng tiếng Việt (tối đa 15 từ) để mở đầu trước kết quả trạm sạc bên dưới.
+FRONT_DOOR_INTRO_SYSTEM = """Bạn là lớp dẫn nhập siêu ngắn cho CHARGEPILOT.
+Viết ĐÚNG 1 cụm/câu dẫn tiếng Việt (tối đa 8 từ) mở đầu trước kết quả trạm sạc bên dưới.
 Luật BẮT BUỘC:
 - Xưng "mình", gọi người dùng là "bạn".
 - KHÔNG chứa mã trạm ([ST_...], [MOTO_HN_...]), tên trạm, số km, % pin, khung giờ, hay lời hứa đặt chỗ/thanh toán/cộng điểm.
-- Chỉ trả về đúng 1 câu ngắn, không xuống dòng."""
+- Chỉ trả về đúng 1 dòng siêu ngắn, không xuống dòng."""
 
 SESSION_LOCK = threading.Lock()
 CONVERSE_SESSIONS: dict[str, dict] = {}
@@ -294,45 +294,35 @@ def build_handoff_request(slots: dict, current_message: str = "", current_req: d
 
 def _fake_chat_reply(message: str, declined: bool = False) -> str:
     if declined:
-        return (
-            "Ok bạn, mình chưa tìm trạm vội. Khi nào cần kiểm tra trạm sạc hay pin xuống thấp, "
-            "bạn cứ nhắn % pin hoặc vị trí ở Hà Nội cho mình nhé!"
-        )
+        return "Ok bạn, khi nào cần tìm trạm sạc ở Hà Nội cứ nhắn % pin nhé!"
     low = tools._norm(message)
     if re.search(r"green score|điểm xanh|leaderboard|bảng xếp hạng|tính điểm|cộng điểm", low):
         return (
-            "Green Score là điểm thưởng dự kiến khi bạn chọn sạc tiết kiệm năng lượng: "
-            "+20 điểm nếu tránh cao điểm 17:30–22:30, +15 điểm khi trùng giờ nắng cao, "
-            "+10 điểm khung đêm 22:30–06:00 và +10 điểm tại trạm biểu giá QĐ 2892 hoặc sạc tại nhà ngoài cao điểm. "
-            "Điểm chỉ được ghi nhận vào Green Score Leaderboard khi bạn bấm xác nhận."
+            "Green Score thưởng điểm khi sạc ngoài cao điểm (+20), giờ nắng cao (+15) hoặc khung đêm (+10). "
+            "Điểm chỉ cộng vào Leaderboard khi bạn bấm xác nhận."
         )
     if re.search(r"đọc kết quả|mã trạm|chưa xác minh|chưa kiểm tầm|mappo|ký hiệu", low):
         return (
-            "Trong kết quả CHARGEPILOT, mã [ST_...] là trụ ô tô và [MOTO_HN_...] là điểm sạc xe máy; "
-            "\"chưa xác minh\" nghĩa là điểm xe máy chưa có trạng thái thời gian thực, còn \"chưa kiểm tầm\" "
-            "xuất hiện khi xe chưa có thông số pin/tầm chạy trong dữ liệu. Khung giờ HH:MM–HH:MM là giờ sạc gợi ý an toàn."
+            "[ST_...] là trụ ô tô, [MOTO_HN_...] là điểm xe máy (\"chưa xác minh\" vì chưa có trạng thái live); "
+            "HH:MM–HH:MM là giờ sạc an toàn."
         )
     if re.search(r"làm được gì|tính năng|giúp gì|hỗ trợ gì|chargepilot là gì|giới thiệu", low):
         return (
-            "Mình là trợ lý mở đầu của CHARGEPILOT tại Hà Nội. Mình có thể chuyển yêu cầu sang hệ thống "
-            "gợi ý Top 3 trạm sạc phù hợp loại xe, tính tầm chạy an toàn theo thời tiết, chọn khung giờ tránh cao điểm "
-            "(hoặc sạc ngay nếu pin dưới 15%), và ước tính điểm Green Score."
+            "CHARGEPILOT gợi ý Top 3 trạm sạc EV tại Hà Nội theo % pin, thời tiết, giờ cao điểm, "
+            "cứu pin <15% và Green Score."
         )
     if re.search(r"^(?:chào|xin chào|hello|hi|hey|alo|chào bạn)\b", low):
         return (
-            "Chào bạn! Mình là trợ lý mở đầu của CHARGEPILOT. Bạn có thể hỏi mình về cách hoạt động, "
-            "Green Score, cách đọc kết quả, hoặc nhắn dòng xe, % pin và vị trí ở Hà Nội để mình tìm trạm sạc nhé."
+            "Chào bạn! Nhắn % pin và vị trí ở Hà Nội để mình tìm trạm sạc nhanh, "
+            "hoặc hỏi mình về Green Score nhé."
         )
-    return (
-        "Mình chỉ hỗ trợ trao đổi về CHARGEPILOT, Green Score, cách đọc kết quả và tìm trạm sạc xe điện tại Hà Nội. "
-        "Nếu bạn đang cần tìm điểm sạc, hãy cho mình biết % pin và vị trí hiện tại ở Hà Nội nhé!"
-    )
+    return "Mình chỉ hỗ trợ sạc xe điện tại Hà Nội và CHARGEPILOT. Bạn cần tìm trạm thì nhắn % pin nhé!"
 
 
 def _fake_intro(handoff_reason: str) -> str:
     if handoff_reason == "rescue":
-        return "Pin dưới 15%, mình chuyển ngay sang chế độ cứu pin cho bạn:"
-    return "Mình đã tổng hợp thông tin và kiểm tra trạm sạc phù hợp cho bạn:"
+        return "Pin <15% — sạc ngay:"
+    return "Gợi ý sạc cho bạn:"
 
 
 def _call_front_door_llm(system: str, messages: list[dict], kind: str, context: dict | None = None) -> dict:
