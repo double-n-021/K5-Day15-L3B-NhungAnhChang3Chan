@@ -1293,6 +1293,26 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/green-score/leaderboard":
             self._send_json(200, {"ok": True, "leaderboard": get_leaderboard()})
             return
+        if path == "/api/v1/weather":
+            now = time.localtime()
+            now_h = now.tm_hour + now.tm_min / 60.0
+            wd = now.tm_wday
+            w = tools.get_weather(now_h, wd)
+            self._send_json(200, {
+                "ok": True,
+                "city": "Hà Nội",
+                "hour": round(now_h, 2),
+                "weekday": wd,
+                "temp_c": w.get("temp_used_c"),
+                "forecast_temp_c": w.get("forecast_temp_c"),
+                "rain_pct": w.get("rain_pct"),
+                "solar_wm2": w.get("solar_wm2"),
+                "solar_best_window": w.get("solar_best_window"),
+                "drain_factor": w.get("drain_factor", 1.0),
+                "notes": w.get("notes", []),
+                "source": w.get("source"),
+            })
+            return
         self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
 
     def do_POST(self) -> None:

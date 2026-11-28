@@ -36,6 +36,7 @@ export default function VehicleScreen() {
     journeyInput,
     setBatteryPct,
     weather,
+    refreshLiveWeather,
     setWeatherCondition,
     recommendation,
     greenPoints,
@@ -264,40 +265,38 @@ export default function VehicleScreen() {
           </View>
         </View>
 
-        {/* Weather Condition Simulator */}
+        {/* Live Auto-Synced Hanoi Weather (Open-Meteo via Server) */}
         <View style={styles.cardPad}>
-          <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary }]}>
-            Thời tiết Hà Nội (mô phỏng tiêu hao pin)
-          </Text>
-          <View style={styles.weatherGrid}>
-            {(Object.keys(HANOI_WEATHER_STATES) as WeatherConditionId[]).map((wId) => {
-              const w = HANOI_WEATHER_STATES[wId];
-              const active = weather.id === wId;
-              return (
-                <Pressable
-                  key={wId}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setWeatherCondition(wId);
-                  }}
-                  style={[styles.weatherPill, active && styles.weatherPillActive]}
-                >
-                  <Image
-                    source={weatherIcon3D(wId)}
-                    style={{ width: 22, height: 22 }}
-                    contentFit="contain"
-                  />
-                  <Text
-                    style={[
-                      TYPOGRAPHY.caption,
-                      { color: active ? '#0B1017' : COLORS.textPrimary },
-                    ]}
-                  >
-                    {w.temperatureC}°C · {w.conditionLabel}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.greenHeaderRow}>
+            <View style={styles.greenTitleLeft}>
+              <Image
+                source={weatherIcon3D(weather.id)}
+                style={{ width: 22, height: 22, flexShrink: 0 }}
+                contentFit="contain"
+              />
+              <Text style={[TYPOGRAPHY.cardTitle, { color: COLORS.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
+                Thời tiết Hà Nội (Tự động)
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                void refreshLiveWeather();
+              }}
+              style={[styles.miniStep, { width: 'auto', paddingHorizontal: 10 }]}
+            >
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700' }]}>
+                Cập nhật
+              </Text>
+            </Pressable>
+          </View>
+          <View style={{ marginTop: 6, gap: 4 }}>
+            <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary }]}>
+              {weather.temperatureC}°C · {weather.conditionLabel}
+            </Text>
+            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, lineHeight: 19 }]}>
+              {weather.impactExplanation}
+            </Text>
           </View>
         </View>
 
