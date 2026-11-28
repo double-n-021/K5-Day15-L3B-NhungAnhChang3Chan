@@ -324,7 +324,10 @@ export default function HomeScreen() {
           <Pressable onPress={() => router.push('/(tabs)/journey')} style={styles.planLine}>
             <Image source={ASSETS_3D.clockGold} style={styles.icon20} contentFit="contain" />
             <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1 }]} numberOfLines={1}>
-              Đang giữ lịch: ghé {activeProposal.stationName} → {activeProposal.destinationName}
+              Đang giữ lịch: ghé {activeProposal.stationName}
+              {activeProposal.destinationName && activeProposal.destinationName !== 'Hà Nội'
+                ? ` → ${activeProposal.destinationName}`
+                : ''}
             </Text>
           </Pressable>
         )}

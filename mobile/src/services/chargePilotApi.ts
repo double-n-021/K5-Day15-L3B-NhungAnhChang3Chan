@@ -198,15 +198,26 @@ export async function checkApiHealth(baseUrl: string): Promise<ApiHealthResponse
 
 /**
  * Short map label without the internal station ID. When the name is generic once "Trạm sạc"
- * is stripped (e.g. many stations are just "VinFast"), append the first part of the address
+ * is stripped (e.g. many stations are just "VinFast"), append a street, power, or distance
  * so neighbouring pins can be told apart.
  */
-function distinctShortName(name: string, address: string | null): string {
+function distinctShortName(
+  name: string,
+  address: string | null,
+  powerKw: number | null,
+  roadKm: number | null
+): string {
   const short = name.replace(/^Trạm sạc\s*/i, '').trim();
   const generic = short.length < 12 || /^(vinfast|v-green|vgreen|ev)$/i.test(short);
-  if (!generic || !address) return short;
-  const street = address.split(',')[0].trim();
-  return street && !short.toLowerCase().includes(street.toLowerCase()) ? `${short} · ${street}` : short;
+  if (!generic) return short;
+
+  const street = address?.split(',')[0].trim();
+  if (street && !/^(hà nội|ha noi)$/i.test(street) && !short.toLowerCase().includes(street.toLowerCase())) {
+    return `${short} · ${street}`;
+  }
+  if (powerKw != null) return `${short} · ${powerKw}kW`;
+  if (roadKm != null) return `${short} · ${roadKm.toFixed(1)} km`;
+  return short;
 }
 
 export async function sendChatMessage(
@@ -360,7 +371,7 @@ export function mapApiStationsToChargingStations(resp: ApiChatResponse): Chargin
             : mappedStatus === 'maintenance'
               ? 'maintenance'
               : 'unknown';
-      const short = distinctShortName(st.name, st.address);
+      const short = distinctShortName(st.name, st.address, st.power_kw, st.road_km);
 
       return {
         id: st.id,
@@ -370,6 +381,7 @@ export function mapApiStationsToChargingStations(resp: ApiChatResponse): Chargin
         address: st.address || `Hà Nội (cách ${st.road_km.toFixed(1)} km)`,
         district: 'Hà Nội',
         coordinates: [st.lon, st.lat],
+        roadKm: Number(st.road_km.toFixed(1)),
         coordinateSource: 'CHARGEPILOT Live API v1.0.0',
         isTelemetrySimulated: true,
         status: mappedStatus,
@@ -505,7 +517,7 @@ export function mapApiResponseToProposedOptions(
       optionIndex: idx,
       totalOptions,
       strategyLabel: `Hạng #${st.rank} · ${st.status_label}`,
-      destinationName: 'Hà Nội',
+      destinationName: resp.slots?.destination?.trim() || '',
       stationName: st.name,
       stationAddress: st.address || `Cách ${st.road_km.toFixed(1)} km`,
       distanceKm: Number(st.road_km.toFixed(1)),

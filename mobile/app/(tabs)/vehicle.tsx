@@ -23,7 +23,6 @@ import { AnimatedBatteryBar, getBatteryColor } from '@/components/shared/Animate
 import { ASSETS_3D } from '@/data/assets3d';
 import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
-import { HANOI_WEATHER_STATES } from '@/data/weather';
 import { useChargePilotStore } from '@/stores/useChargePilotStore';
 import { COLORS, RADIUS, SPACING } from '@/theme/tokens';
 import { TYPOGRAPHY } from '@/theme/typography';
@@ -41,10 +40,9 @@ export default function VehicleScreen() {
     vehicleId,
     setVehicleId,
     journeyInput,
-    setBatteryPct,
+    confirmBatteryPct,
     weather,
     refreshLiveWeather,
-    setWeatherCondition,
     recommendation,
     greenPoints,
     rewardHistory,
@@ -201,7 +199,7 @@ export default function VehicleScreen() {
                 contentFit="contain"
               />
               <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]}>
-                {vehicle.fastChargeNote}
+                {vehicle.fastChargeNote.replace(/->/g, '→')}
               </Text>
             </View>
           </View>
@@ -238,7 +236,7 @@ export default function VehicleScreen() {
                 key={val}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
-                  setBatteryPct(val);
+                  confirmBatteryPct(val);
                 }}
                 style={[
                   styles.presetPctBtn,
@@ -259,13 +257,13 @@ export default function VehicleScreen() {
               </Pressable>
             ))}
             <Pressable
-              onPress={() => setBatteryPct(journeyInput.batteryPct - 2)}
+              onPress={() => confirmBatteryPct(journeyInput.batteryPct - 2)}
               style={styles.miniStep}
             >
               <Minus size={15} color={COLORS.textPrimary} />
             </Pressable>
             <Pressable
-              onPress={() => setBatteryPct(journeyInput.batteryPct + 2)}
+              onPress={() => confirmBatteryPct(journeyInput.batteryPct + 2)}
               style={styles.miniStep}
             >
               <Plus size={15} color={COLORS.textPrimary} />

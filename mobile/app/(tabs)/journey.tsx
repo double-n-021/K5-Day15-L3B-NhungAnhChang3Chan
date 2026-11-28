@@ -34,7 +34,6 @@ import {
 import { MascotAssistant } from '@/components/mascot/MascotAssistant';
 import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { MarkdownText, stripMarkdown } from '@/components/shared/MarkdownText';
-import { ASSETS_3D } from '@/data/assets3d';
 import { CUSTOM_ICONS } from '@/data/customIcons';
 import { formatVnd } from '@/services/decisionEngine';
 import {
@@ -679,11 +678,13 @@ export default function JourneyScreen() {
                     }}
                     style={styles.sampleCard}
                   >
-                    <Image
-                      source={ASSETS_3D.micGold}
-                      style={{ width: 18, height: 18 }}
-                      contentFit="contain"
-                    />
+                    <View style={styles.micBadge}>
+                      <Image
+                        source={CUSTOM_ICONS.micVoice}
+                        style={{ width: 16, height: 16 }}
+                        contentFit="contain"
+                      />
+                    </View>
                     <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, flex: 1 }]}>
                       {s.label}
                     </Text>
@@ -757,8 +758,13 @@ export default function JourneyScreen() {
                 {lastApiResponse.mappo_strategy && (
                   <View style={styles.mappoPill}>
                     <ShieldCheck size={14} color={COLORS.energyGreen} />
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={1}>
-                      MAPPO: {lastApiResponse.mappo_strategy.strategy_vi}
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={2}>
+                      {/* "SKIP" next to a station card reads as a contradiction: soften it (not in rescue). */}
+                      {lastApiResponse.mappo_strategy.strategy === 'SKIP' && lastApiResponse.intent_state !== 'rescue'
+                        ? activeOption.reward.points > 0
+                          ? `Pin vẫn đủ chạy tiếp · Hoặc sạc ngay nhận +${activeOption.reward.points}đ Sạc Xanh`
+                          : 'Pin vẫn đủ chạy tiếp · Có thể sạc dự phòng tại trạm dưới'
+                        : `MAPPO: ${lastApiResponse.mappo_strategy.strategy_vi}`}
                     </Text>
                   </View>
                 )}
@@ -877,7 +883,7 @@ export default function JourneyScreen() {
                   ]}
                 >
                   <Image
-                    source={activeOption.reward.isSolarNoon ? CUSTOM_ICONS.greenCharge : ASSETS_3D.coin}
+                    source={CUSTOM_ICONS.greenCharge}
                     style={{ width: 24, height: 24 }}
                     contentFit="contain"
                   />
@@ -917,7 +923,10 @@ export default function JourneyScreen() {
                       {activeOption.stationName}
                     </Text>
                     <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginTop: 2 }]} numberOfLines={2}>
-                      Đi {activeOption.destinationName} · {activeOption.stationAddress}
+                      {activeOption.destinationName && activeOption.destinationName !== 'Hà Nội'
+                        ? `Đi ${activeOption.destinationName} · `
+                        : ''}
+                      {activeOption.stationAddress}
                     </Text>
                   </View>
                 </View>
@@ -1268,6 +1277,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  micBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.energyGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pointsBadge: {
     flexShrink: 0,

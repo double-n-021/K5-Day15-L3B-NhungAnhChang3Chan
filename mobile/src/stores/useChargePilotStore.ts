@@ -33,6 +33,7 @@ import { fetchCurrentUserLocation } from '@/services/locationService';
 import type {
   ApiChatResponse,
   ApiConnectionStatus,
+  ApiIntentState,
   ApiLeaderboardEntry,
   ChargingPreference,
   ChargingStation,
@@ -210,6 +211,22 @@ const initialComputed = recompute(DEFAULT_INPUT, DEFAULT_WEATHER, [], 'metropoli
 // A reported battery % is reused for this long, then the driver is asked again (pin tụt khi xe chạy).
 export const BATTERY_CONFIRM_TTL_MS = 30 * 60 * 1000;
 const PCT_IN_TEXT_RE = /\d{1,3}\s*%/;
+
+function shouldAttachBatteryToPrompt(trimmed: string, lastIntentState?: ApiIntentState | null): boolean {
+  if (PCT_IN_TEXT_RE.test(trimmed)) return false;
+
+  const isDecline = /^(không|khong|ko|k|thôi|chưa cần|để sau|khỏi|no|nope)(?![\p{L}\p{M}\p{N}_])/iu.test(trimmed);
+  const isGuardrailProbe = /(đặt cọc|giữ trụ|thanh toán|chuyển khoản|otp|đà nẵng|hải phòng|sài gòn|tp\.?\s*hcm)/i.test(trimmed);
+  if (isDecline || isGuardrailProbe) return false;
+
+  const hasTripIntent =
+    /(trạm|sạc|gần nhất|còn trống|hết pin|pin yếu)/i.test(trimmed) ||
+    /(?:^|[^\p{L}\p{M}\p{N}_])(?:đi|tới|đến|sang|qua)\s+|(?:^|[^\p{L}\p{M}\p{N}_])lúc\s+\d/iu.test(trimmed);
+  const isGreetingOrFaq = /(?:^|[^\p{L}\p{M}\p{N}_])(chào|xin chào|hello|hi|hey|alo|tính sao|làm được gì|giới thiệu|bảng xếp hạng|đọc kết quả|hướng dẫn|green score là gì)(?![\p{L}\p{M}\p{N}_])/iu.test(trimmed);
+  if (isGreetingOrFaq && !hasTripIntent) return false;
+
+  return hasTripIntent || lastIntentState === 'ask_back' || lastIntentState === 'partial_prompt';
+}
 
 export function isBatteryFresh(confirmedAt: number | null): boolean {
   return confirmedAt !== null && Date.now() - confirmedAt <= BATTERY_CONFIRM_TTL_MS;
@@ -516,11 +533,11 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     const [originLon, originLat] = effectiveInput.origin.coordinates;
     const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
 
-    // Attach the driver's own recent battery report when this message has no %, so they never
-    // have to repeat it. Plain text keeps it working on both /converse and the /chat fallback.
+    // Reuse a recent battery report for charging and trip requests or related follow-ups.
     const mentionsPct = PCT_IN_TEXT_RE.test(trimmed);
     const messageToSend =
-      !mentionsPct && isBatteryFresh(get().batteryConfirmedAt)
+      isBatteryFresh(get().batteryConfirmedAt) &&
+      shouldAttachBatteryToPrompt(trimmed, get().lastApiResponse?.intent_state)
         ? `${trimmed.replace(/[.\s]+$/, '')}. Pin còn ${get().journeyInput.batteryPct}%.`
         : trimmed;
 

@@ -48,6 +48,7 @@ export interface ChargingStation {
   address: string;
   district: string;
   coordinates: [number, number]; // [lng, lat]
+  roadKm?: number;
   coordinateSource: string;
   isTelemetrySimulated: true;
   status: StationStatus;
@@ -362,6 +363,7 @@ export interface ApiHealthResponse {
   model_name: string;
   apk_available: boolean;
   apk_meta: Record<string, unknown>;
+  mappo_status?: Record<string, unknown>;
 }
 
 export interface ApiDeviceContext {

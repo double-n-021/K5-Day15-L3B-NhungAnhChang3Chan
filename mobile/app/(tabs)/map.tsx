@@ -198,11 +198,13 @@ export default function SmartMapScreen() {
             accessibilityRole="button"
             accessibilityLabel="Nói với AI để tìm trạm sạc"
           >
-            <Image
-              source={ASSETS_3D.micGold}
-              style={{ width: 20, height: 20 }}
-              contentFit="contain"
-            />
+            <View style={styles.micBadge}>
+              <Image
+                source={CUSTOM_ICONS.micVoice}
+                style={{ width: 16, height: 16 }}
+                contentFit="contain"
+              />
+            </View>
             <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={1}>
               Nói với AI nơi bạn muốn đến...
             </Text>
@@ -449,15 +451,29 @@ export default function SmartMapScreen() {
 
               <View style={styles.metricsGrid}>
                 <View style={styles.metricBox}>
-                  <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}>
-                    {selectedEval ? `${selectedEval.distanceToStationKm} km` : 'Trong TP'}
+                  <Text
+                    style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
+                    {selectedEval
+                      ? `${selectedEval.distanceToStationKm} km`
+                      : selectedStation.roadKm != null
+                        ? `${selectedStation.roadKm} km`
+                        : 'Hà Nội'}
                   </Text>
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
                     Cách
                   </Text>
                 </View>
                 <View style={styles.metricBox}>
-                  <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}>
+                  <Text
+                    style={[TYPOGRAPHY.metricMedium, { color: COLORS.textPrimary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
                     {selectedStation.availableBays}/{selectedStation.totalBays}
                   </Text>
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
@@ -475,6 +491,9 @@ export default function SmartMapScreen() {
                             : COLORS.energyGreen,
                       },
                     ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
                   >
                     {selectedStation.estimatedWaitMin}p
                   </Text>
@@ -483,7 +502,12 @@ export default function SmartMapScreen() {
                   </Text>
                 </View>
                 <View style={styles.metricBox}>
-                  <Text style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]}>
+                  <Text
+                    style={[TYPOGRAPHY.metricMedium, { color: COLORS.energyGreen }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
                     {selectedEval ? `${selectedEval.chargeMin}p` : `${selectedStation.maxPowerKw}kW`}
                   </Text>
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary }]}>
@@ -794,6 +818,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: RADIUS.pill,
+  },
+  micBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.energyGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metricsGrid: {
     flexDirection: 'row',
