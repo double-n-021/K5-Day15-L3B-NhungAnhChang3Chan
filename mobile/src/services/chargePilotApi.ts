@@ -51,6 +51,14 @@ export function formatLocalTimeHHMM(date: Date = new Date()): string {
   return `${hh}:${mm}`;
 }
 
+class ApiHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function fetchJson<T>(
   url: string,
   options: RequestInit = {},
@@ -83,7 +91,7 @@ async function fetchJson<T>(
         parsed && typeof parsed === 'object' && 'error' in parsed
           ? String((parsed as { error?: unknown }).error || '')
           : '';
-      throw new Error(apiErr || `Máy chủ trả mã lỗi HTTP ${resp.status}`);
+      throw new ApiHttpError(resp.status, apiErr || `Máy chủ trả mã lỗi HTTP ${resp.status}`);
     }
 
     if (!parsed || typeof parsed !== 'object') {
@@ -128,6 +136,39 @@ export async function sendChatMessage(
     },
     25000
   );
+}
+
+/**
+ * Call demo front-door endpoint POST /api/v1/converse, falling back cleanly to
+ * /api/v1/chat if the remote VPS has not deployed /api/v1/converse yet (HTTP 404).
+ */
+export async function sendConverseMessage(
+  baseUrl: string,
+  payload: ApiChatRequest
+): Promise<ApiChatResponse> {
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base) {
+    throw new Error('Chưa nhập địa chỉ máy chủ VPS.');
+  }
+  const message = (payload.message ?? payload.text ?? '').trim();
+  try {
+    return await fetchJson<ApiChatResponse>(
+      `${base}/api/v1/converse`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: payload.session_id,
+          message,
+        }),
+      },
+      25000
+    );
+  } catch (err) {
+    if (err instanceof ApiHttpError && err.status === 404) {
+      return sendChatMessage(baseUrl, payload);
+    }
+    throw err;
+  }
 }
 
 export async function resetChatSession(

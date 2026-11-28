@@ -15,7 +15,7 @@ import {
   mergeApiStationsIntoList,
   normalizeBaseUrl,
   resetChatSession,
-  sendChatMessage,
+  sendConverseMessage,
 } from '@/services/chargePilotApi';
 import {
   applyScenariosToState,
@@ -454,7 +454,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
     const defaultVehicle = vehicleId === 'vinfast_evo200' ? 'VinFast Evo200' : 'VF e34';
 
     try {
-      const resp = await sendChatMessage(apiBaseUrl, {
+      const resp = await sendConverseMessage(apiBaseUrl, {
         message: trimmed,
         session_id: apiSessionId,
         device_context: {
@@ -467,13 +467,13 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
       });
 
       const nextVehicleId: VehicleId =
-        resp.vehicle.vehicle_type === 'xe_may'
+        resp.vehicle?.vehicle_type === 'xe_may'
           ? 'vinfast_evo200'
-          : resp.vehicle.model
+          : resp.vehicle?.model
             ? 'vfe34'
             : vehicleId;
       const nextBattery =
-        resp.battery.current_pct !== null
+        resp.battery?.current_pct !== null && resp.battery?.current_pct !== undefined
           ? Math.max(5, Math.min(100, Math.round(resp.battery.current_pct)))
           : get().journeyInput.batteryPct;
 

@@ -102,6 +102,8 @@ const INTENT_LABELS: Record<string, string> = {
   home_charging: 'Sạc tại nhà',
   ask_back: 'Cần bổ sung thông tin',
   refusal: 'Ngoài phạm vi hỗ trợ',
+  chat: 'Trò chuyện',
+  partial_prompt: 'Xác nhận tìm trạm',
 };
 
 const STAGE_ICON_COLOR: Record<JourneyStageType, string> = {
@@ -370,6 +372,12 @@ export default function JourneyScreen() {
     } else if (st === 'ask_back') {
       mascotMood = 'warning';
       mascotBadge = 'CẦN BỔ SUNG THÔNG TIN';
+    } else if (st === 'partial_prompt') {
+      mascotMood = 'idle';
+      mascotBadge = 'XÁC NHẬN TÌM TRẠM';
+    } else if (st === 'chat') {
+      mascotMood = 'happy';
+      mascotBadge = 'TRỢ LÝ CHARGEPILOT';
     } else if (st === 'home_charging') {
       mascotMood = 'happy';
       mascotBadge = 'SẠC TẠI NHÀ';
@@ -516,6 +524,7 @@ export default function JourneyScreen() {
                 {(() => {
                   const needsClarify =
                     lastApiResponse?.intent_state === 'ask_back' ||
+                    lastApiResponse?.intent_state === 'partial_prompt' ||
                     Boolean(parsedRequest && !parsedRequest.isComplete);
                   const hasProposal =
                     !needsClarify && Boolean(activeOption || lastApiResponse?.intent_state === 'home_charging');
@@ -693,7 +702,7 @@ export default function JourneyScreen() {
                   </View>
                 )}
                 <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
-                {lastApiResponse.guardrails.excluded_note && (
+                {lastApiResponse.guardrails?.excluded_note && (
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
                     Lưu ý an toàn: {lastApiResponse.guardrails.excluded_note}
                   </Text>
@@ -717,6 +726,33 @@ export default function JourneyScreen() {
                     </Text>
                   </Pressable>
                 )}
+              </Animated.View>
+            )}
+
+            {/* Front-door partial_prompt quick Yes/No reply chips */}
+            {!busyThinking &&
+              apiSourceMode === 'live' &&
+              lastApiResponse?.intent_state === 'partial_prompt' && (
+              <Animated.View entering={FadeInDown.duration(200)} style={styles.missingBox}>
+                <View style={styles.quickChipsRow}>
+                  {[
+                    { label: 'Có, tìm trạm sạc', text: 'Có, tìm giúp mình' },
+                    { label: 'Không, cảm ơn', text: 'Không, cảm ơn' },
+                  ].map((q) => (
+                    <Pressable
+                      key={q.label}
+                      onPress={() => {
+                        setPromptText(q.text);
+                        void submitNaturalText(q.text);
+                      }}
+                      style={styles.quickChip}
+                    >
+                      <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen }]}>
+                        {q.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </Animated.View>
             )}
 

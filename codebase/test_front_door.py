@@ -232,15 +232,27 @@ class FrontDoorHttpTest(unittest.TestCase):
             return err.code, json.loads(err.read().decode("utf-8"))
 
     def test_converse_http_multiturn_rescue_and_reset(self) -> None:
+        with urllib.request.urlopen(self.base_url + "/", timeout=10) as home:
+            html = home.read().decode("utf-8")
+        self.assertIn("/api/v1/converse", html)
+        self.assertIn("/api/v1/chat", html)
+
         sid = "http_fd_01"
         s1, r1 = self._post("/api/v1/converse", {"session_id": sid, "message": "Chào bạn"})
         self.assertEqual(s1, 200)
         self.assertTrue(r1["ok"])
         self.assertEqual(r1["action"], "chat")
+        self.assertEqual(r1["intent_state"], "chat")
+        self.assertEqual(r1["stations"], [])
+        self.assertEqual(r1["reply"], r1["reply_text"])
+        self.assertIn("tts_summary", r1)
+        self.assertIn("guardrails", r1)
+        self.assertIn("green_reward", r1)
 
         s2, r2 = self._post("/api/v1/converse", {"session_id": sid, "message": "Xe VF e34, đi lúc 18h, sạc lên 90%"})
         self.assertEqual(s2, 200)
         self.assertEqual(r2["action"], "partial_prompt")
+        self.assertEqual(r2["intent_state"], "partial_prompt")
         self.assertEqual(r2["reply"], front_door.PARTIAL_OFFER_TEXT)
 
         s3, r3 = self._post("/api/v1/converse", {"session_id": sid, "message": "Mình đang ở Cầu Giấy"})
@@ -255,6 +267,9 @@ class FrontDoorHttpTest(unittest.TestCase):
         self.assertEqual(s5, 200)
         self.assertEqual(r5["action"], "handoff")
         self.assertEqual(r5["handoff_reason"], "rescue")
+        self.assertEqual(r5["intent_state"], "rescue")
+        self.assertTrue(r5["stations"])
+        self.assertTrue(r5["battery"]["rescue_mode"])
         self.assertEqual(r5["slots"]["target_pct"], 90)
         self.assertEqual(r5["slots"]["now_h"], "18:00")
         self.assertEqual(r5["slots"]["origin"], "Cầu Giấy")
