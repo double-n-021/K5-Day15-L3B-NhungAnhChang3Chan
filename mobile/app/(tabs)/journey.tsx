@@ -22,6 +22,7 @@ import {
   Clock,
   ExternalLink,
   Flag,
+  Info,
   Mic,
   MicOff,
   Navigation,
@@ -762,7 +763,7 @@ export default function JourneyScreen() {
                       {/* "SKIP" next to a station card reads as a contradiction: soften it (not in rescue). */}
                       {lastApiResponse.mappo_strategy.strategy === 'SKIP' && lastApiResponse.intent_state !== 'rescue'
                         ? activeOption.reward.points > 0
-                          ? `Pin vẫn đủ chạy tiếp · Hoặc sạc ngay nhận +${activeOption.reward.points}đ Sạc Xanh`
+                          ? 'Pin vẫn đủ chạy tiếp · Có thể sạc sớm để tích điểm'
                           : 'Pin vẫn đủ chạy tiếp · Có thể sạc dự phòng tại trạm dưới'
                         : `MAPPO: ${lastApiResponse.mappo_strategy.strategy_vi}`}
                     </Text>
@@ -867,48 +868,37 @@ export default function JourneyScreen() {
             {/* Single Clean AI Proposal Card */}
             {!busyThinking && activeOption && (
               <Animated.View entering={FadeInDown.duration(220)} style={styles.proposalCard}>
-                {/* Off-Peak Solar Noon Reward Banner */}
-                <View
-                  style={[
-                    styles.rewardBanner,
-                    activeOption.reward.isSolarNoon
-                      ? {
-                          backgroundColor: COLORS.energyGreenDim,
-                          borderColor: COLORS.energyGreenBorder,
-                        }
-                      : {
-                          backgroundColor: COLORS.surfaceElevated,
-                          borderColor: COLORS.border,
-                        },
-                  ]}
-                >
-                  <Image
-                    source={CUSTOM_ICONS.greenCharge}
-                    style={{ width: 24, height: 24 }}
-                    contentFit="contain"
-                  />
-                  <View style={{ flex: 1 }}>
+                {/* Compact 1-line Green Score Pill (breakdown lives in details / Vehicle tab) */}
+                {activeOption.reward.points > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setShowFullReply(true);
+                      setTimeout(() => {
+                        scrollRef.current?.scrollToEnd({ animated: true });
+                      }, 120);
+                    }}
+                    style={styles.rewardCompactPill}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cộng ${activeOption.reward.points} điểm Sạc Xanh, chạm để xem chi tiết cách tính`}
+                  >
+                    <Image
+                      source={CUSTOM_ICONS.greenCharge}
+                      style={{ width: 18, height: 18, flexShrink: 0 }}
+                      contentFit="contain"
+                    />
                     <Text
-                      style={[
-                        TYPOGRAPHY.caption,
-                        {
-                          color: activeOption.reward.isSolarNoon
-                            ? COLORS.energyGreen
-                            : COLORS.textPrimary,
-                          fontWeight: '700',
-                        },
-                      ]}
+                      style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, fontWeight: '700', flex: 1 }]}
+                      numberOfLines={1}
                     >
-                      {activeOption.reward.label}
+                      +{activeOption.reward.points} điểm Sạc Xanh
                       {activeOption.reward.discountVnd > 0
                         ? ` · Giảm ~${formatVnd(activeOption.reward.discountVnd)}`
                         : ''}
                     </Text>
-                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, marginTop: 2 }]}>
-                      {activeOption.reward.reason}
-                    </Text>
-                  </View>
-                </View>
+                    <Info size={14} color={COLORS.energyGreen} />
+                  </Pressable>
+                )}
 
                 <View style={styles.stationHeroRow}>
                   <View style={styles.stationThumb3D}>
@@ -1076,8 +1066,10 @@ export default function JourneyScreen() {
               </Animated.View>
             )}
 
-            {/* Collapsible verbatim AI analysis below the glanceable proposal card */}
-            {!busyThinking && activeOption && apiSourceMode === 'live' && lastApiResponse && (
+            {/* Collapsible AI analysis & Green Score breakdown below the glanceable proposal card */}
+            {!busyThinking &&
+              activeOption &&
+              (activeOption.reward.points > 0 || (apiSourceMode === 'live' && lastApiResponse)) && (
               <View style={{ gap: 8 }}>
                 <Pressable
                   onPress={() => {
@@ -1088,13 +1080,32 @@ export default function JourneyScreen() {
                 >
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, fontWeight: '600' }]}>
                     {showFullReply
-                      ? 'Thu gọn phân tích AI ▴'
-                      : 'Xem chi tiết phân tích AI (Top 3 & luật an toàn) ▾'}
+                      ? 'Thu gọn phân tích AI & điểm Sạc Xanh ▴'
+                      : 'Xem chi tiết phân tích AI & cách tính điểm ▾'}
                   </Text>
                 </Pressable>
                 {showFullReply && (
                   <Animated.View entering={FadeInDown.duration(160)} style={styles.liveReplyCard}>
-                    <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
+                    {activeOption.reward.points > 0 && (
+                      <View style={styles.rewardDetailBox}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Image
+                            source={CUSTOM_ICONS.greenCharge}
+                            style={{ width: 16, height: 16, flexShrink: 0 }}
+                            contentFit="contain"
+                          />
+                          <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, fontWeight: '700' }]}>
+                            Chi tiết +{activeOption.reward.points} điểm Sạc Xanh
+                          </Text>
+                        </View>
+                        <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, lineHeight: 18 }]}>
+                          {activeOption.reward.reason}
+                        </Text>
+                      </View>
+                    )}
+                    {apiSourceMode === 'live' && lastApiResponse && (
+                      <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
+                    )}
                   </Animated.View>
                 )}
               </View>
@@ -1376,13 +1387,25 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     gap: 10,
   },
-  rewardBanner: {
+  rewardCompactPill: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
-    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.energyGreenDim,
     borderWidth: 1,
-    padding: SPACING.md,
+    borderColor: COLORS.energyGreenBorder,
+  },
+  rewardDetailBox: {
+    backgroundColor: COLORS.energyGreenDim,
+    borderColor: COLORS.energyGreenBorder,
+    borderWidth: 1,
+    borderRadius: RADIUS.md,
+    padding: 10,
+    gap: 4,
+    marginBottom: 8,
   },
   stationHeroRow: {
     flexDirection: 'row',

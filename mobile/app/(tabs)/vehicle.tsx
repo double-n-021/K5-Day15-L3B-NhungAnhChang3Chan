@@ -53,6 +53,7 @@ export default function VehicleScreen() {
   } = useChargePilotStore();
 
   const [showLicenses, setShowLicenses] = useState(false);
+  const [showGreenRules, setShowGreenRules] = useState(false);
   const [angleIdx, setAngleIdx] = useState(0);
   const [nameDraft, setNameDraft] = useState(driverName);
 
@@ -381,6 +382,48 @@ export default function VehicleScreen() {
               ))}
             </View>
           )}
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowGreenRules((v) => !v);
+            }}
+            style={styles.greenRulesToggle}
+            accessibilityRole="button"
+            accessibilityLabel="Cách tính điểm Sạc Xanh"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Info size={14} color={COLORS.energyGreen} />
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, fontWeight: '700' }]}>
+                Cách tính điểm Sạc Xanh
+              </Text>
+            </View>
+            {showGreenRules ? (
+              <ChevronUp size={15} color={COLORS.energyGreen} />
+            ) : (
+              <ChevronDown size={15} color={COLORS.energyGreen} />
+            )}
+          </Pressable>
+
+          {showGreenRules && (
+            <View style={styles.greenRulesBox}>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +20đ: Sạc ngoài khung cao điểm lưới điện (17:30–22:30)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +15đ: Trùng giờ bức xạ mặt trời cao (≥300 W/m²)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +10đ: Trạm biểu giá bậc giờ QĐ 2892 hoặc sạc tại nhà
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, styles.licenseLine]}>
+                • +10đ: Khung thấp điểm đêm (22:30–06:00)
+              </Text>
+              <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, marginTop: 2 }]}>
+                Điểm chỉ cộng khi bạn bấm xác nhận theo lịch.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Asset Licenses */}
@@ -644,6 +687,25 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 10,
     gap: 6,
+  },
+  greenRulesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.energyGreenDim,
+    borderColor: COLORS.energyGreenBorder,
+    borderWidth: 1,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  greenRulesBox: {
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    gap: 4,
   },
   apiStatusBadge: {
     flexDirection: 'row',
