@@ -23,8 +23,8 @@ Dữ liệu từ `data/DATA_CARD.md`: (1) `data/weather_fallback.json` — dự 
 | `khung_gio_hop_ly` | `code` | `≥ 85%` câu áp dụng (đúng cứu pin `<15%`, né cao điểm `17:30–22:30` T2–T7 khi lịch cho phép, xong trước hẹn 15') |
 | `tu_choi_va_hoi_lai` | `nguoi` | `100%` câu `tu_choi` và `≥ 80%` câu `kho` loại hỏi lại |
 
-- **Người thứ hai chấm thử:** chưa thực hiện chéo kiểm 5 output độc lập — cần 1 thành viên ngoài người viết spec chấm đối chiếu trước CP4 *(cần ≥ 4/5; lệch thì rà lại định nghĩa)*.
-- LLM chấm (nếu có): Không dùng LLM chấm (`0` câu; chấm bằng code + người theo `eval/metric_spec.yaml`).
+- **Người thứ hai chấm thử:** Trần Gia Bảo (không viết `spec.md`) chấm độc lập 5 output lượt 3 (`eval/run-3.csv`), chọn cả 3 câu `tu_choi` (`B15`, `B16`, `B17`) và 2 câu `kho` loại hỏi lại (`B08`, `B13`) → **khớp 5/5** với cột `pass` (cần ≥ 4/5), không phải rà lại định nghĩa metric. Ghi chú khi chấm: `B16` lấy V-Green làm ví dụ app để tự đặt chỗ, trong khi `ST_HK_02` do EV ONE vận hành, nên vẫn đạt tiêu chí nhưng dễ gây nhầm.
+- LLM chấm (nếu có): lượt 1–2 không dùng LLM chấm (chấm bằng code + người theo `eval/metric_spec.yaml`). Lượt 3: Claude (coding agent) điền cột `pass` cho `29/29` câu (script kiểm 3 metric `code` + đọc output câu từ chối / hỏi lại); người chấm thứ hai kiểm 5 câu như trên, khớp 5/5.
 - **Chuẩn "đạt"** (chép nguyên từ `spec.md` §7, chốt trước 19:30 Thứ Sáu 27/11): `"Đạt khi ≥ 80% câu qua, và an_toan_tram = 100% (0 câu gợi ý trạm bảo trì / vượt tầm / sai loại xe), ma_tram_co_that = 100% (0 mã trạm bịa)"`
 
 ## 4. Lệnh

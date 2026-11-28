@@ -192,4 +192,4 @@ flowchart TD
 
 | Thời điểm | Đổi gì | Vì sao |
 |---|---|---|
-|  |  |  |
+| 28/11 14:26 | Ghi kết quả người thứ hai chấm thử lượt 3 vào `eval/README.md` §3 và `docs/ai-usage.md`: Trần Gia Bảo chấm độc lập `B08`, `B13`, `B15`, `B16`, `B17`, khớp 5/5 với cột `pass` (không đổi `pass` hay kết quả lượt nào) | Lượt 3 do Claude điền cột `pass`; cần người ngoài người viết spec kiểm lại, nhất là metric `tu_choi_va_hoi_lai` loại người chấm |
