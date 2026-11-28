@@ -186,7 +186,7 @@ export default function HomeScreen() {
             <Image
               source={vehicle.angles[0].source}
               style={styles.vehicleThumb}
-              contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
+              contentFit="cover"
               transition={150}
             />
             {/* Name gets the full row width so "VinFast Evo200 2023" is never cut. */}

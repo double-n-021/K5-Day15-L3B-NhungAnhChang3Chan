@@ -128,7 +128,7 @@ export default function VehicleScreen() {
             <Image
               source={activeAngle.source}
               style={styles.heroImage}
-              contentFit={vehicle.category === 'motorbike' ? 'contain' : 'cover'}
+              contentFit="cover"
               transition={150}
             />
             {vehicle.angles.length > 1 && (

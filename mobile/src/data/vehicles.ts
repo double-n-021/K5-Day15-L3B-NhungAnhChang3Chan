@@ -18,12 +18,12 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
       {
         id: 'front34',
         label: 'Góc trước',
-        source: require('../../assets/vehicles/vfe34-front34.webp'),
+        source: require('../../assets/vehicles/vfe34-studio-front34.jpg'),
       },
       {
         id: 'rear34',
         label: 'Góc sau',
-        source: require('../../assets/vehicles/vfe34-rear34.webp'),
+        source: require('../../assets/vehicles/vfe34-studio-rear34.jpg'),
       },
     ],
   },
