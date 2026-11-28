@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { getBatteryColor } from '@/components/shared/AnimatedBatteryBar';
+import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { ASSETS_3D } from '@/data/assets3d';
 import { CUSTOM_ICONS } from '@/data/customIcons';
 import { VEHICLES } from '@/data/vehicles';
@@ -123,21 +124,9 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Location + points */}
+        {/* Brand + points */}
         <View style={styles.topBar}>
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              void refreshUserLocation();
-            }}
-            style={styles.locationRow}
-            accessibilityLabel="Cập nhật vị trí GPS hiện tại"
-          >
-            <Image source={ASSETS_3D.mapPinGold} style={styles.icon22} contentFit="contain" />
-            <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
-              {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
-            </Text>
-          </Pressable>
+          <ChargePilotBrand size={28} />
 
           <Pressable
             onPress={() => router.push('/(tabs)/vehicle')}
@@ -150,6 +139,21 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* Compact GPS origin bar */}
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            void refreshUserLocation();
+          }}
+          style={styles.locationRow}
+          accessibilityLabel="Cập nhật vị trí GPS hiện tại"
+        >
+          <Image source={ASSETS_3D.mapPinGold} style={styles.icon18} contentFit="contain" />
+          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flexShrink: 1 }]} numberOfLines={1}>
+            {gpsStatus === 'loading' ? 'Đang lấy GPS...' : locationLabel}
+          </Text>
+        </Pressable>
 
         {/* Vehicle + battery card (compact) */}
         <View style={styles.card}>
@@ -369,8 +373,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: 10,
   },
   icon18: { width: 18, height: 18, flexShrink: 0 },
   icon20: { width: 20, height: 20, flexShrink: 0 },
@@ -380,14 +384,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.xs,
   },
   locationRow: {
-    flex: 1,
-    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: -2,
   },
   pointsPill: {
     flexShrink: 0,
@@ -407,7 +410,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: SPACING.md,
-    gap: SPACING.md,
+    gap: 10,
     ...SHADOWS.card,
   },
   catRow: {
@@ -420,7 +423,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    minHeight: 40,
+    minHeight: 38,
     paddingHorizontal: 10,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.surfaceElevated,
@@ -486,7 +489,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: RADIUS.sm,
@@ -500,8 +503,8 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   bigMicBtn: {
-    width: 84,
-    minHeight: 84,
+    width: 80,
+    minHeight: 76,
     borderRadius: RADIUS.xl,
     backgroundColor: COLORS.energyGreen,
     alignItems: 'center',
@@ -513,7 +516,7 @@ const styles = StyleSheet.create({
   },
   nearestBtn: {
     flex: 1,
-    minHeight: 84,
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
@@ -540,9 +543,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickChip: {
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: 12,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -562,7 +565,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     paddingLeft: SPACING.lg,
     paddingRight: 6,
-    minHeight: 52,
+    minHeight: 48,
   },
   input: {
     flex: 1,
@@ -571,7 +574,7 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     paddingHorizontal: SPACING.lg,
-    height: 40,
+    height: 36,
     borderRadius: RADIUS.pill,
     backgroundColor: COLORS.energyGreen,
     alignItems: 'center',
@@ -596,6 +599,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
+    paddingVertical: 8,
   },
 });

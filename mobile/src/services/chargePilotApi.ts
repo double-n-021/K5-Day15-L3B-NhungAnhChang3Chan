@@ -126,10 +126,11 @@ export interface ApiLiveWeatherResponse {
 }
 
 export async function fetchLiveWeather(baseUrl: string): Promise<ApiLiveWeatherResponse> {
-  return requestJson<ApiLiveWeatherResponse>(`${normalizeBaseUrl(baseUrl)}/api/v1/weather`, {
-    method: 'GET',
-    timeoutMs: 6000,
-  });
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base) {
+    throw new Error('Chưa nhập địa chỉ máy chủ VPS.');
+  }
+  return fetchJson<ApiLiveWeatherResponse>(`${base}/api/v1/weather`, { method: 'GET' }, 6000);
 }
 
 export function buildWeatherConditionFromApi(params: {

@@ -32,6 +32,7 @@ import {
   XCircle,
 } from 'lucide-react-native';
 import { MascotAssistant } from '@/components/mascot/MascotAssistant';
+import { ChargePilotBrand } from '@/components/shared/ChargePilotBrand';
 import { MarkdownText, stripMarkdown } from '@/components/shared/MarkdownText';
 import { ASSETS_3D } from '@/data/assets3d';
 import { CUSTOM_ICONS } from '@/data/customIcons';
@@ -474,9 +475,7 @@ export default function JourneyScreen() {
       {/* Minimal Header */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <Text style={[TYPOGRAPHY.sectionTitle, { color: COLORS.textPrimary, flex: 1 }]} numberOfLines={1}>
-            Trợ lý ChargePilot
-          </Text>
+          <ChargePilotBrand size={32} />
           <View style={styles.headerActions}>
             <Pressable
               onPress={() => {
