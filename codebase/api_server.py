@@ -683,6 +683,7 @@ def handle_converse(payload: dict) -> tuple[int, dict]:
         return 400, {"ok": False, "error": "Thiếu nội dung 'message'."}
 
     session_id = str(payload.get("session_id") or "").strip() or ("sess_" + uuid.uuid4().hex[:12])
+    device_context = payload.get("device_context")
     agent_trace: dict = {"summary": {}, "events": []}
 
     def run_agent(handoff_query: str) -> dict:
@@ -700,7 +701,12 @@ def handle_converse(payload: dict) -> tuple[int, dict]:
 
     t0 = time.perf_counter()
     try:
-        fd_res = front_door.converse(session_id, message, answer_fn=run_agent)
+        fd_res = front_door.converse(
+            session_id,
+            message,
+            answer_fn=run_agent,
+            device_context=device_context,
+        )
     except Exception as exc:
         return 502, {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     latency_s = time.perf_counter() - t0

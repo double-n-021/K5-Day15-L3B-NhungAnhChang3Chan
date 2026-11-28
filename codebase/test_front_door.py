@@ -191,6 +191,68 @@ class FrontDoorUnitTest(unittest.TestCase):
         self.assertEqual(captured["body"]["output_config"], {"effort": "low"})
         self.assertEqual(captured["body"]["max_tokens"], 2048)
 
+    def test_device_context_enables_short_pin_handoff_without_breaking_chat_or_spoken_slots(self) -> None:
+        dev_ctx = {
+            "lat": 21.0285,
+            "lon": 105.8542,
+            "default_vehicle": "VF e34",
+            "local_time": "14:00",
+            "weekday": 5,
+        }
+
+        # 1. Pure greeting with device_context must STILL chat and leave session slots empty
+        r_greet = front_door.converse("fd_ctx_chat", "Chào bạn", device_context=dev_ctx)
+        self.assertEqual(r_greet["action"], "chat")
+        self.assertIsNone(r_greet["slots"]["origin"])
+        self.assertIsNone(r_greet["slots"]["vehicle"])
+
+        # 2. "pin 40%" + GPS device_context hands off immediately
+        r_short = front_door.converse("fd_ctx_short", "pin 40%", device_context=dev_ctx)
+        self.assertEqual(r_short["action"], "handoff")
+        self.assertEqual(r_short["handoff_reason"], "battery_and_location")
+        parsed = tools.parse_request(r_short["handoff_query"])
+        self.assertEqual(parsed["current_pct"], 40)
+        self.assertEqual(parsed["origin"]["name"], "Hồ Hoàn Kiếm")
+        self.assertEqual(parsed["vehicle"]["model"], "VinFast VF e34")
+        self.assertEqual(parsed["now_h"], 14.0)
+        self.assertEqual(parsed["weekday"], 5)
+
+        # 3. Spoken slots (Cầu Giấy, Evo200, 18:00) override device_context defaults
+        evo_ctx = {
+            "lat": 21.0285,
+            "lon": 105.8542,
+            "default_vehicle": "VF e34",
+            "local_time": "09:00",
+            "weekday": 0,
+        }
+        r_spoken = front_door.converse(
+            "fd_ctx_spoken",
+            "Evo200 pin 30% đang ở Cầu Giấy lúc 18:00",
+            device_context=evo_ctx,
+        )
+        self.assertEqual(r_spoken["action"], "handoff")
+        p_spoken = tools.parse_request(r_spoken["handoff_query"])
+        self.assertEqual(p_spoken["vehicle"]["model"], "VinFast Evo200 2023")
+        self.assertEqual(p_spoken["origin"]["name"], "Cầu Giấy")
+        self.assertEqual(p_spoken["now_h"], 18.0)
+
+        # 4. "Pin còn 12%" + GPS device_context triggers immediate rescue with GPS origin
+        r_rescue = front_door.converse("fd_ctx_rescue", "Pin còn 12%", device_context=dev_ctx)
+        self.assertEqual(r_rescue["action"], "handoff")
+        self.assertEqual(r_rescue["handoff_reason"], "rescue")
+        self.assertIn("Hồ Hoàn Kiếm", r_rescue["handoff_query"])
+
+        # 5. Unmapped spoken area ("Ba Vì") must NOT be overwritten by GPS Hoàn Kiếm
+        r_bavi = front_door.converse("fd_ctx_bavi", "Pin 40%, đang ở Ba Vì", device_context=dev_ctx)
+        self.assertEqual(r_bavi["action"], "partial_prompt")
+        self.assertEqual(r_bavi["slots"]["place_phrase"], "Ba Vì")
+
+        # 6. Out-of-scope refusal ignores device_context completely
+        r_oos = front_door.converse("fd_ctx_oos", "Đi Hạ Long sạc ở đâu?", device_context=dev_ctx)
+        self.assertEqual(r_oos["action"], "handoff")
+        self.assertEqual(r_oos["handoff_reason"], "refusal")
+        self.assertEqual(r_oos["handoff_query"], "Đi Hạ Long sạc ở đâu?")
+
 
 class FrontDoorHttpTest(unittest.TestCase):
     """End-to-end HTTP tests for POST /api/v1/converse and session reset."""
@@ -295,6 +357,33 @@ class FrontDoorHttpTest(unittest.TestCase):
         self.assertEqual(s_chat, 200)
         self.assertEqual(chat["intent_state"], "recommendation")
         self.assertTrue(chat["stations"])
+
+    def test_converse_http_with_device_context_for_short_pin_and_greeting(self) -> None:
+        ctx = {
+            "lat": 21.0285,
+            "lon": 105.8542,
+            "default_vehicle": "VF e34",
+            "local_time": "14:00",
+            "weekday": 5,
+        }
+        s_hi, r_hi = self._post(
+            "/api/v1/converse",
+            {"session_id": "http_ctx_01", "message": "Chào bạn", "device_context": ctx},
+        )
+        self.assertEqual(s_hi, 200)
+        self.assertEqual(r_hi["action"], "chat")
+        self.assertEqual(r_hi["intent_state"], "chat")
+
+        s_pin, r_pin = self._post(
+            "/api/v1/converse",
+            {"session_id": "http_ctx_01", "message": "pin 40%", "device_context": ctx},
+        )
+        self.assertEqual(s_pin, 200)
+        self.assertEqual(r_pin["action"], "handoff")
+        self.assertEqual(r_pin["intent_state"], "recommendation")
+        self.assertTrue(r_pin["stations"])
+        self.assertEqual(r_pin["vehicle"]["model"], "VinFast VF e34")
+        self.assertEqual(r_pin["battery"]["current_pct"], 40)
 
 
 if __name__ == "__main__":
