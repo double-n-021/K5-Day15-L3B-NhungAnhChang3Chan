@@ -503,57 +503,88 @@ export default function JourneyScreen() {
               </Pressable>
             </View>
 
-            {/* 3-Step User Flow Stepper: Input -> Proposal -> Confirmed & Navigate */}
-            <View style={styles.flowStepper}>
-              {[
-                {
-                  num: 1,
-                  label: '1. Yêu cầu',
-                  done: Boolean(lastApiResponse || activeOption || parsedRequest),
-                  active: !lastApiResponse && !activeOption,
-                },
-                {
-                  num: 2,
-                  label: '2. Đề xuất AI',
-                  done: itineraryStatus === 'accepted',
-                  active: Boolean(lastApiResponse || activeOption) && itineraryStatus !== 'accepted',
-                },
-                {
-                  num: 3,
-                  label: '3. Chốt & Đi',
-                  done: itineraryStatus === 'accepted',
-                  active: itineraryStatus === 'accepted',
-                },
-              ].map((step, idx) => (
-                <React.Fragment key={step.num}>
-                  <View
-                    style={[
-                      styles.flowStepPill,
-                      step.done && styles.flowStepDone,
-                      step.active && !step.done && styles.flowStepActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        TYPOGRAPHY.micro,
-                        {
-                          color: step.done
-                            ? '#0B1017'
-                            : step.active
-                              ? COLORS.energyGreen
-                              : COLORS.textMuted,
-                          fontWeight: step.done || step.active ? '700' : '500',
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {step.done ? `✓ ${step.label}` : step.label}
-                    </Text>
-                  </View>
-                  {idx < 2 && <View style={styles.flowStepConnector} />}
-                </React.Fragment>
-              ))}
-            </View>
+            {/* 3-Step Human-in-the-Loop (HITL) User Flow Stepper */}
+            {lastApiResponse?.intent_state === 'refusal' ? (
+              <View style={styles.flowRefusalPill}>
+                <ShieldCheck size={14} color={COLORS.warningAmber} />
+                <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
+                  Chốt chặn an toàn · Yêu cầu ngoài phạm vi / thẩm quyền
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.flowStepper}>
+                {(() => {
+                  const needsClarify =
+                    lastApiResponse?.intent_state === 'ask_back' ||
+                    Boolean(parsedRequest && !parsedRequest.isComplete);
+                  const hasProposal =
+                    !needsClarify && Boolean(activeOption || lastApiResponse?.intent_state === 'home_charging');
+                  const step3Confirmed = itineraryStatus === 'accepted' || isHomeTokenConfirmed;
+                  const step3Declined = itineraryStatus === 'declined';
+
+                  const steps = [
+                    {
+                      num: 1,
+                      label: needsClarify ? '1. Bổ sung tin' : '1. Yêu cầu',
+                      done: hasProposal,
+                      active: !hasProposal,
+                      warn: needsClarify,
+                    },
+                    {
+                      num: 2,
+                      label: '2. Đề xuất AI',
+                      done: step3Confirmed || step3Declined,
+                      active: hasProposal && !step3Confirmed && !step3Declined,
+                      warn: false,
+                    },
+                    {
+                      num: 3,
+                      label: step3Declined
+                        ? '3. Tự chọn'
+                        : isHomeTokenConfirmed
+                          ? '3. Đã xác nhận'
+                          : '3. Chốt & Đi',
+                      done: step3Confirmed,
+                      active: step3Confirmed || step3Declined,
+                      warn: step3Declined,
+                    },
+                  ];
+
+                  return steps.map((step, idx) => (
+                    <React.Fragment key={step.num}>
+                      <View
+                        style={[
+                          styles.flowStepPill,
+                          step.done && styles.flowStepDone,
+                          step.warn && !step.done && styles.flowStepWarn,
+                          step.active && !step.done && !step.warn && styles.flowStepActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            TYPOGRAPHY.micro,
+                            {
+                              color: step.done
+                                ? '#0B1017'
+                                : step.warn
+                                  ? COLORS.warningAmber
+                                  : step.active
+                                    ? COLORS.energyGreen
+                                    : COLORS.textMuted,
+                              fontWeight: step.done || step.active || step.warn ? '700' : '500',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {step.done ? `✓ ${step.label}` : step.label}
+                        </Text>
+                      </View>
+                      {idx < 2 && <View style={styles.flowStepConnector} />}
+                    </React.Fragment>
+                  ));
+                })()}
+              </View>
+            )}
           </>
         )}
       </View>
@@ -1324,6 +1355,22 @@ const styles = StyleSheet.create({
   flowStepDone: {
     borderColor: COLORS.energyGreen,
     backgroundColor: COLORS.energyGreen,
+  },
+  flowStepWarn: {
+    borderColor: COLORS.warningAmberBorder,
+    backgroundColor: COLORS.warningAmberDim,
+  },
+  flowRefusalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.warningAmberDim,
+    borderWidth: 1,
+    borderColor: COLORS.warningAmberBorder,
   },
   flowStepConnector: {
     flex: 1,
