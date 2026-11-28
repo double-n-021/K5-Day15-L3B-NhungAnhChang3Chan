@@ -15,7 +15,9 @@ import json
 import math
 import os
 import re
+import time
 import unicodedata
+import urllib.request
 
 from tracing import tool, TOOLS  # noqa: F401
 
@@ -23,6 +25,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 
 ROAD_FACTOR = 1.3
+USE_LIVE_OSRM = False                       # bật True khi chạy api_server thật; giữ False khi chạy eval offline
+OSRM_TABLE_URL = "https://router.project-osrm.org/table/v1/driving"
+_OSRM_CACHE = {}                            # key -> (ts, result)
 SAFETY_MARGIN = 0.8
 RESCUE_PCT = 15
 DEFAULT_TARGET_PCT = 80
@@ -82,6 +87,41 @@ def _haversine(lat1, lon1, lat2, lon2):
 
 def road_km(lat1, lon1, lat2, lon2):
     return _haversine(lat1, lon1, lat2, lon2) * ROAD_FACTOR
+
+
+def osrm_batch_road_km(origin_lat: float, origin_lon: float, targets: list, timeout: float = 4.0) -> dict:
+    """Trace khoảng cách & thời gian lái đường bộ thực tế bằng 1 lần gọi OSRM Table API (miễn phí, không cần key).
+    targets: [(id, lat, lon), ...]. Trả về {id: (road_km, drive_min)}. Lỗi mạng -> trả {} để fallback."""
+    if not targets:
+        return {}
+    key = (round(origin_lat, 4), round(origin_lon, 4), tuple((t[0], round(t[1], 4), round(t[2], 4)) for t in targets))
+    cached = _OSRM_CACHE.get(key)
+    now = time.time()
+    if cached and (now - cached[0]) < 300.0:
+        return cached[1]
+    coords = ["%.5f,%.5f" % (origin_lon, origin_lat)] + ["%.5f,%.5f" % (t[2], t[1]) for t in targets]
+    dst_idx = ";".join(str(i + 1) for i in range(len(targets)))
+    url = "%s/%s?sources=0&destinations=%s&annotations=distance,duration" % (OSRM_TABLE_URL, ";".join(coords), dst_idx)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ChargePilot-OSRM/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data.get("code") != "Ok":
+            return {}
+        dists = (data.get("distances") or [[]])[0]
+        durs = (data.get("durations") or [[]])[0]
+        out = {}
+        for idx, (tid, _, _) in enumerate(targets):
+            if idx < len(dists) and dists[idx] is not None:
+                km = round(float(dists[idx]) / 1000.0, 2)
+                mins = max(1, int(round(float(durs[idx]) / 60.0))) if (idx < len(durs) and durs[idx] is not None) else None
+                out[tid] = (km, mins)
+        if len(_OSRM_CACHE) > 256:
+            _OSRM_CACHE.clear()
+        _OSRM_CACHE[key] = (now, out)
+        return out
+    except Exception:
+        return {}
 
 
 def fmt_h(h):
@@ -401,9 +441,44 @@ def find_stations(lat: float, lon: float, vehicle_type: str, safe_km: float = No
             item = {"id": s["id"], "name": s["name"], "road_km": round(d, 2), "status": None,
                     "operator": s.get("operator"), "power_kw": s.get("power_kw"), "kind": "xe_may"}
         item["score"] = round(score, 2)
+        item["_lat"] = s["lat"]
+        item["_lon"] = s["lon"]
         top.append(item)
     top.sort(key=lambda x: x["score"])
-    return {"top": top[:limit], "excluded": excluded}
+
+    # Khi chạy server thật (USE_LIVE_OSRM=True): trace lại khoảng cách đường thật từ OSRM cho Top 8 ứng viên
+    if USE_LIVE_OSRM and top:
+        probe = top[:min(8, len(top))]
+        real_map = osrm_batch_road_km(lat, lon, [(x["id"], x["_lat"], x["_lon"]) for x in probe])
+        if real_map:
+            refined = []
+            for item in probe:
+                if item["id"] in real_map:
+                    r_km, r_min = real_map[item["id"]]
+                    if r_km > max(cap, 0) + 1e-9:
+                        excluded.append((item["id"], "ngoài tầm an toàn theo đường thực tế (%s km)" % fmt_km(r_km)))
+                        continue
+                    item["road_km"] = r_km
+                    item["distance_source"] = "osrm_live"
+                    if r_min is not None:
+                        item["drive_min"] = r_min
+                    if item["kind"] == "o_to":
+                        crowded = item.get("status") == "crowded"
+                        item["score"] = round(
+                            r_km + (2.0 if rescue else 3.0) * crowded + (0 if rescue else 0.5 * item.get("queue", 0)), 2
+                        )
+                    else:
+                        item["score"] = round(r_km, 2)
+                refined.append(item)
+            if refined:
+                refined.sort(key=lambda x: x["score"])
+                top = refined
+
+    out_top = []
+    for item in top[:limit]:
+        clean = {k: v for k, v in item.items() if not k.startswith("_")}
+        out_top.append(clean)
+    return {"top": out_top, "excluded": excluded}
 
 
 # ------------------------------------------------------------------ công cụ 5: khung giờ sạc

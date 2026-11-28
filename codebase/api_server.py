@@ -1546,6 +1546,7 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
                 "apk_available": meta.get("available", False),
                 "apk_meta": meta,
                 "mappo_status": mappo_policy.ENGINE.status(),
+                "osrm_live_routing": tools.USE_LIVE_OSRM,
             })
             return
         if path == "/api/release":
@@ -1571,6 +1572,26 @@ class ChargePilotHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/green-score/leaderboard":
             self._send_json(200, {"ok": True, "leaderboard": get_leaderboard()})
+            return
+        if path == "/api/v1/weather":
+            now = time.localtime()
+            now_h = now.tm_hour + now.tm_min / 60.0
+            wd = now.tm_wday
+            w = tools.get_weather(now_h, wd)
+            self._send_json(200, {
+                "ok": True,
+                "city": "Hà Nội",
+                "hour": round(now_h, 2),
+                "weekday": wd,
+                "temp_c": w.get("temp_used_c"),
+                "forecast_temp_c": w.get("forecast_temp_c"),
+                "rain_pct": w.get("rain_pct"),
+                "solar_wm2": w.get("solar_wm2"),
+                "solar_best_window": w.get("solar_best_window"),
+                "drain_factor": w.get("drain_factor", 1.0),
+                "notes": w.get("notes", []),
+                "source": w.get("source"),
+            })
             return
         self._send_json(404, {"ok": False, "error": f"Không tìm thấy đường dẫn {path}"})
 
@@ -1721,9 +1742,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=default_port, help=f"Cổng lắng nghe (mặc định {default_port})")
     args = parser.parse_args()
 
+    tools.USE_LIVE_OSRM = os.environ.get("USE_LIVE_OSRM", "1").strip().lower() not in ("0", "false", "no")
     server = create_server(args.host, args.port)
     print(f"CHARGEPILOT API v{CONTRACT_VERSION} đang chạy tại http://{args.host}:{args.port} "
-          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER}")
+          f"(Android emulator: http://10.0.2.2:{args.port}) · provider={ai.MODEL_PROVIDER} · osrm_live={tools.USE_LIVE_OSRM}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

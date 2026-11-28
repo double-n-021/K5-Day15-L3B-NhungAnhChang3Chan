@@ -3,9 +3,11 @@ import { DEMO_SEQUENCE } from '@/data/presets';
 import { HANOI_PLACES, HANOI_STATIONS } from '@/data/stations';
 import { HANOI_WEATHER_STATES } from '@/data/weather';
 import {
+  buildWeatherConditionFromApi,
   checkApiHealth,
   confirmGreenScore,
   fetchGreenLeaderboard,
+  fetchLiveWeather,
   formatLocalTimeHHMM,
   generateSessionId,
   getApiWeekday,
@@ -17,6 +19,7 @@ import {
   resetChatSession,
   sendConverseMessage,
 } from '@/services/chargePilotApi';
+import { fetchLiveOsrmRoute } from '@/services/routeService';
 import {
   applyScenariosToState,
   evaluateChargingDecision,
@@ -118,6 +121,7 @@ interface ChargePilotState {
   setApiBaseUrl: (url: string) => void;
   setDriverName: (name: string) => void;
   checkServerHealth: () => Promise<boolean>;
+  refreshLiveWeather: () => Promise<void>;
   refreshLeaderboard: () => Promise<void>;
   sendPromptToApi: (prompt: string) => Promise<void>;
   confirmGreenToken: (token: string, label?: string) => Promise<boolean>;
@@ -452,11 +456,35 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         apiError: null,
       });
       void get().refreshLeaderboard();
+      void get().refreshLiveWeather();
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không kết nối được máy chủ.';
       set({ apiStatus: 'offline', apiError: msg });
       return false;
+    }
+  },
+
+  refreshLiveWeather: async () => {
+    try {
+      const w = await fetchLiveWeather(get().apiBaseUrl);
+      if (w.ok && w.temp_c !== null) {
+        const nextWeather = buildWeatherConditionFromApi({
+          tempC: w.temp_c,
+          rainPct: w.rain_pct,
+          drainFactor: w.drain_factor,
+          solarWm2: w.solar_wm2,
+        });
+        const computed = recompute(
+          get().journeyInput,
+          nextWeather,
+          get().activeScenarios,
+          get().selectedStationId
+        );
+        set({ weather: nextWeather, ...computed });
+      }
+    } catch {
+      // Keep current weather when server is offline
     }
   },
 
@@ -526,7 +554,15 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
         vehicleId: nextVehicleId,
         batteryPct: nextBattery,
       };
-      const computed = recompute(nextInput, weather, activeScenarios, selectedStationId);
+      const nextWeather =
+        resp.weather && resp.weather.temp_used_c !== null
+          ? buildWeatherConditionFromApi({
+              tempC: resp.weather.temp_used_c,
+              drainFactor: resp.weather.drain_factor,
+              solarWm2: resp.weather.solar_wm2,
+            })
+          : weather;
+      const computed = recompute(nextInput, nextWeather, activeScenarios, selectedStationId);
       const apiChargingStations = mapApiStationsToChargingStations(resp);
       const mergedStations = mergeApiStationsIntoList(
         computed.effectiveStations,
@@ -541,6 +577,7 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
       set({
         vehicleId: nextVehicleId,
         journeyInput: nextInput,
+        weather: nextWeather,
         ...computed,
         effectiveStations: mergedStations,
         apiStatus: 'online',
@@ -564,6 +601,45 @@ export const useChargePilotStore = create<ChargePilotState>((set, get) => ({
           computed.recommendation.recommended?.station.id ??
           selectedStationId,
       });
+
+      // Refine proposed option distances & drive times using real live OSRM road routing (matches Google Maps)
+      if (options.length > 0) {
+        const originCoord = effectiveInput.origin.coordinates;
+        const reqSession = resp.session_id || apiSessionId;
+        void Promise.all(
+          options.map(async (opt) => {
+            if (opt.stationLat == null || opt.stationLon == null) return opt;
+            try {
+              const route = await fetchLiveOsrmRoute({
+                fromId: effectiveInput.origin.id || 'gps_origin',
+                toId: opt.apiStationId || opt.hanoiStationId || opt.id,
+                originCoord,
+                destCoord: [opt.stationLon, opt.stationLat],
+                destinationName: opt.stationName,
+              });
+              const realKm = Number((route.distanceMeters / 1000).toFixed(1));
+              const realMin = Math.max(2, Math.round(route.durationSeconds / 60));
+              return {
+                ...opt,
+                distanceKm: realKm,
+                driveMin: realMin,
+                timeline: opt.timeline.map((st) =>
+                  st.type === 'driving'
+                    ? { ...st, time: `+${realMin}p`, durationMin: realMin }
+                    : st
+                ),
+              };
+            } catch {
+              return opt;
+            }
+          })
+        ).then((refined) => {
+          const cur = get();
+          if (cur.apiSessionId === reqSession && cur.lastApiResponse === resp) {
+            set({ proposedOptions: refined });
+          }
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể kết nối máy chủ CHARGEPILOT.';
       set({
