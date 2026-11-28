@@ -357,6 +357,15 @@ export interface ApiChatRequest {
   device_context?: ApiDeviceContext;
 }
 
+export interface ApiMappoStrategy {
+  engine: string;
+  strategy: 'SKIP' | 'TOPUP' | 'FULL';
+  strategy_vi: string;
+  recommended_station_id: string | null;
+  confidence: number | null;
+  guardrail_l2_ok: boolean;
+}
+
 export interface ApiChatResponse {
   ok: boolean;
   contract_version: string;
@@ -386,6 +395,7 @@ export interface ApiChatResponse {
   };
   stations: ApiStationItem[];
   charge_window: ApiChargeWindow | null;
+  mappo_strategy?: ApiMappoStrategy | null;
   green_reward: ApiGreenReward;
   follow_up_questions: string[];
   guardrails: ApiGuardrails;

@@ -230,6 +230,7 @@ export default function JourneyScreen() {
       }
 
       setIsThinking(true);
+      setPromptText('');
       try {
         await sendPromptToApi(trimmed);
         const stateAfter = useChargePilotStore.getState();
@@ -242,6 +243,9 @@ export default function JourneyScreen() {
         } else {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         }
+        setTimeout(() => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }, 160);
       } finally {
         setIsThinking(false);
       }
@@ -469,34 +473,119 @@ export default function JourneyScreen() {
         </View>
 
         {!isKeyboardOpen && (
-          <View style={styles.segmentWrap}>
-            <Pressable
-              onPress={() => setMode('chat')}
-              style={[styles.segmentBtn, mode === 'chat' && styles.segmentBtnActive]}
-            >
-              <Text
-                style={[
-                  TYPOGRAPHY.caption,
-                  { color: mode === 'chat' ? '#0B1017' : COLORS.textSecondary },
-                ]}
+          <>
+            <View style={styles.segmentWrap}>
+              <Pressable
+                onPress={() => setMode('chat')}
+                style={[styles.segmentBtn, mode === 'chat' && styles.segmentBtnActive]}
               >
-                Trò chuyện AI
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMode('timeline')}
-              style={[styles.segmentBtn, mode === 'timeline' && styles.segmentBtnActive]}
-            >
-              <Text
-                style={[
-                  TYPOGRAPHY.caption,
-                  { color: mode === 'timeline' ? '#0B1017' : COLORS.textSecondary },
-                ]}
+                <Text
+                  style={[
+                    TYPOGRAPHY.caption,
+                    { color: mode === 'chat' ? '#0B1017' : COLORS.textSecondary },
+                  ]}
+                >
+                  Trò chuyện AI
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setMode('timeline')}
+                style={[styles.segmentBtn, mode === 'timeline' && styles.segmentBtnActive]}
               >
-                Lộ trình ({activeTimeline.length})
-              </Text>
-            </Pressable>
-          </View>
+                <Text
+                  style={[
+                    TYPOGRAPHY.caption,
+                    { color: mode === 'timeline' ? '#0B1017' : COLORS.textSecondary },
+                  ]}
+                >
+                  Lộ trình ({activeTimeline.length})
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* 3-Step Human-in-the-Loop (HITL) User Flow Stepper */}
+            {lastApiResponse?.intent_state === 'refusal' ? (
+              <View style={styles.flowRefusalPill}>
+                <ShieldCheck size={14} color={COLORS.warningAmber} />
+                <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber, fontWeight: '700', flex: 1 }]} numberOfLines={1}>
+                  Chốt chặn an toàn · Yêu cầu ngoài phạm vi / thẩm quyền
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.flowStepper}>
+                {(() => {
+                  const needsClarify =
+                    lastApiResponse?.intent_state === 'ask_back' ||
+                    Boolean(parsedRequest && !parsedRequest.isComplete);
+                  const hasProposal =
+                    !needsClarify && Boolean(activeOption || lastApiResponse?.intent_state === 'home_charging');
+                  const step3Confirmed = itineraryStatus === 'accepted' || isHomeTokenConfirmed;
+                  const step3Declined = itineraryStatus === 'declined';
+
+                  const steps = [
+                    {
+                      num: 1,
+                      label: needsClarify ? '1. Bổ sung tin' : '1. Yêu cầu',
+                      done: hasProposal,
+                      active: !hasProposal,
+                      warn: needsClarify,
+                    },
+                    {
+                      num: 2,
+                      label: '2. Đề xuất AI',
+                      done: step3Confirmed || step3Declined,
+                      active: hasProposal && !step3Confirmed && !step3Declined,
+                      warn: false,
+                    },
+                    {
+                      num: 3,
+                      label: step3Declined
+                        ? '3. Tự chọn'
+                        : isHomeTokenConfirmed
+                          ? '3. Đã xác nhận'
+                          : '3. Chốt & Đi',
+                      done: step3Confirmed,
+                      active: step3Confirmed || step3Declined,
+                      warn: step3Declined,
+                    },
+                  ];
+
+                  return steps.map((step, idx) => (
+                    <React.Fragment key={step.num}>
+                      <View
+                        style={[
+                          styles.flowStepPill,
+                          step.done && styles.flowStepDone,
+                          step.warn && !step.done && styles.flowStepWarn,
+                          step.active && !step.done && !step.warn && styles.flowStepActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            TYPOGRAPHY.micro,
+                            {
+                              color: step.done
+                                ? '#0B1017'
+                                : step.warn
+                                  ? COLORS.warningAmber
+                                  : step.active
+                                    ? COLORS.energyGreen
+                                    : COLORS.textMuted,
+                              fontWeight: step.done || step.active || step.warn ? '700' : '500',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {step.done ? `✓ ${step.label}` : step.label}
+                        </Text>
+                      </View>
+                      {idx < 2 && <View style={styles.flowStepConnector} />}
+                    </React.Fragment>
+                  ));
+                })()}
+              </View>
+            )}
+          </>
         )}
       </View>
 
@@ -572,6 +661,18 @@ export default function JourneyScreen() {
               </Animated.View>
             )}
 
+            {/* User Query Bubble */}
+            {!busyThinking && apiSourceMode === 'live' && lastApiResponse?.query && (
+              <Animated.View entering={FadeInDown.duration(160)} style={styles.userBubble}>
+                <Text style={[TYPOGRAPHY.micro, { color: COLORS.textSecondary, marginBottom: 2 }]}>
+                  Bạn vừa hỏi
+                </Text>
+                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, lineHeight: 19 }]}>
+                  {lastApiResponse.query}
+                </Text>
+              </Animated.View>
+            )}
+
             {/* AI Full Reply Card */}
             {!busyThinking && apiSourceMode === 'live' && lastApiResponse && (
               <Animated.View entering={FadeInDown.duration(200)} style={styles.liveReplyCard}>
@@ -583,6 +684,14 @@ export default function JourneyScreen() {
                     {INTENT_LABELS[lastApiResponse.intent_state] || 'Tư vấn sạc'}
                   </Text>
                 </View>
+                {lastApiResponse.mappo_strategy && (
+                  <View style={styles.mappoPill}>
+                    <ShieldCheck size={14} color={COLORS.energyGreen} />
+                    <Text style={[TYPOGRAPHY.micro, { color: COLORS.energyGreen, flex: 1 }]} numberOfLines={2}>
+                      MAPPO: {lastApiResponse.mappo_strategy.strategy_vi}
+                    </Text>
+                  </View>
+                )}
                 <MarkdownText>{lastApiResponse.reply_text}</MarkdownText>
                 {lastApiResponse.guardrails.excluded_note && (
                   <Text style={[TYPOGRAPHY.micro, { color: COLORS.warningAmber }]}>
@@ -765,12 +874,15 @@ export default function JourneyScreen() {
                     onPress={() => {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
                       acceptProposedItinerary();
+                      setTimeout(() => {
+                        scrollRef.current?.scrollToEnd({ animated: true });
+                      }, 120);
                     }}
                     style={styles.acceptBtn}
                   >
                     <Check size={15} color="#0B1017" />
                     <Text style={[TYPOGRAPHY.caption, { color: '#0B1017', fontWeight: '700' }]} numberOfLines={1}>
-                      {itineraryStatus === 'accepted' ? 'Đã chọn' : 'Theo lịch này'}
+                      {itineraryStatus === 'accepted' ? 'Đã chốt lịch' : 'Theo lịch này'}
                     </Text>
                   </Pressable>
 
@@ -802,6 +914,15 @@ export default function JourneyScreen() {
                   </Pressable>
                 </View>
 
+                {itineraryStatus === 'accepted' && (
+                  <View style={styles.confirmedBanner}>
+                    <Check size={15} color={COLORS.energyGreen} />
+                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.energyGreen, flex: 1 }]}>
+                      Đã chốt lịch trình tới {activeOption.stationName}. Chọn dẫn đường hoặc xem lộ trình bên dưới!
+                    </Text>
+                  </View>
+                )}
+
                 {itineraryStatus === 'accepted' &&
                   !activeOption.isIntercitySimulated &&
                   (activeOption.hanoiStationId || activeOption.apiStationId) && (
@@ -812,6 +933,21 @@ export default function JourneyScreen() {
                     <Navigation size={16} color="#0B1017" />
                     <Text style={[TYPOGRAPHY.cardTitle, { color: '#0B1017' }]}>
                       Bắt đầu dẫn đường mô phỏng
+                    </Text>
+                  </Pressable>
+                )}
+
+                {itineraryStatus === 'accepted' && activeTimeline.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setMode('timeline');
+                    }}
+                    style={styles.timelineCtaBtn}
+                  >
+                    <Clock size={15} color={COLORS.textPrimary} />
+                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textPrimary, fontWeight: '700' }]}>
+                      Xem lộ trình chi tiết ({activeTimeline.length} chặng)
                     </Text>
                   </Pressable>
                 )}
@@ -1197,6 +1333,93 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.energyGreenDim,
     borderWidth: 1,
     borderColor: COLORS.energyGreenBorder,
+  },
+  flowStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  flowStepPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  flowStepActive: {
+    borderColor: COLORS.energyGreenBorder,
+    backgroundColor: COLORS.energyGreenDim,
+  },
+  flowStepDone: {
+    borderColor: COLORS.energyGreen,
+    backgroundColor: COLORS.energyGreen,
+  },
+  flowStepWarn: {
+    borderColor: COLORS.warningAmberBorder,
+    backgroundColor: COLORS.warningAmberDim,
+  },
+  flowRefusalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.warningAmberDim,
+    borderWidth: 1,
+    borderColor: COLORS.warningAmberBorder,
+  },
+  flowStepConnector: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 4,
+  },
+  userBubble: {
+    alignSelf: 'flex-end',
+    maxWidth: '88%',
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.navBlueBorder,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+  },
+  mappoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.energyGreenDim,
+    borderWidth: 1,
+    borderColor: COLORS.energyGreenBorder,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  confirmedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.energyGreenDim,
+    borderWidth: 1,
+    borderColor: COLORS.energyGreenBorder,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+  },
+  timelineCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   inputDock: {
     flexDirection: 'row',
